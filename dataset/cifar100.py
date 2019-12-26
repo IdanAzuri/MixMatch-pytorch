@@ -139,7 +139,10 @@ class CIFAR100_labeled(torchvision.datasets.CIFAR100):
                  transform=transform, target_transform=target_transform,
                  download=download)
         if indexs is not None:
-            self.data = self.data[indexs]
+            try:
+                self.data = self.data[indexs]
+            except:
+                self.data = self.train_data[indexs]
             self.targets = np.array(self.targets)[indexs]
         self.data = transpose(normalise(self.data))
 
