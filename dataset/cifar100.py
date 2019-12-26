@@ -45,15 +45,15 @@ def get_cifar100(root, n_labeled,
 
 def train_val_split(labels, n_labeled_per_class):
     labels = np.array(labels)
-    train_labeled_idxs = np.arange(len(labels))
-    train_unlabeled_idxs = np.arange(len(labels))
-    val_idxs = np.arange(len(labels))
+    train_labeled_idxs = []
+    train_unlabeled_idxs = []
+    val_idxs = []
 
     for i in range(100):
         idxs = np.array(labels) == i
-        train_labeled_idxs.extend(train_labeled_idxs[idxs][:n_labeled_per_class])
-        train_unlabeled_idxs.extend(train_unlabeled_idxs[idxs][n_labeled_per_class:-500])
-        val_idxs.extend(val_idxs[idxs][-500:])
+        train_labeled_idxs.extend(np.arange(len(labels))[idxs][:n_labeled_per_class])
+        train_unlabeled_idxs.extend(np.arange(len(labels))[idxs][n_labeled_per_class:-500])
+        val_idxs.extend(np.arange(len(labels))[idxs][-500:])
     np.random.shuffle(train_labeled_idxs)
     np.random.shuffle(train_unlabeled_idxs)
     np.random.shuffle(val_idxs)
