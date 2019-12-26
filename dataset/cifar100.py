@@ -32,7 +32,7 @@ def get_cifar100(root, n_labeled,
 
     base_dataset = torchvision.datasets.CIFAR100(root, train=True, download=download)
 
-    train_labeled_idxs, train_unlabeled_idxs, val_idxs = train_val_split(get_labels(base_dataset), int(n_labeled/10))
+    train_labeled_idxs, train_unlabeled_idxs, val_idxs = train_val_split(100, int(n_labeled/10))
 
     train_labeled_dataset = CIFAR100_labeled(root, train_labeled_idxs, train=True, transform=transform_train)
     train_unlabeled_dataset = CIFAR100_unlabeled(root, train_unlabeled_idxs, train=True, transform=TransformTwice(transform_train))
@@ -50,10 +50,11 @@ def train_val_split(labels, n_labeled_per_class):
     val_idxs = []
 
     for i in range(100):
-        idxs = np.array(labels) == i
-        train_labeled_idxs.extend(np.arange(len(labels))[idxs][:n_labeled_per_class])
-        train_unlabeled_idxs.extend(np.arange(len(labels))[idxs][n_labeled_per_class:-500])
-        val_idxs.extend(np.arange(len(labels))[idxs][-500:])
+        idxs = np.where(labels == i)[0]
+        np.random.shuffle(idxs)
+        train_labeled_idxs.extend(idxs[:n_labeled_per_class])
+        train_unlabeled_idxs.extend(idxs[n_labeled_per_class:-500])
+        val_idxs.extend(idxs[-500:])
     np.random.shuffle(train_labeled_idxs)
     np.random.shuffle(train_unlabeled_idxs)
     np.random.shuffle(val_idxs)
