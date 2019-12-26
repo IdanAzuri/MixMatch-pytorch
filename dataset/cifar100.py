@@ -143,6 +143,7 @@ class CIFAR100_labeled(torchvision.datasets.CIFAR100):
                 self.data = self.data[indexs]
             except:
                 self.data = self.train_data[indexs]
+            self.targets = get_labels(self)
             self.targets = np.array(self.targets)[indexs]
         self.data = transpose(normalise(self.data))
 
