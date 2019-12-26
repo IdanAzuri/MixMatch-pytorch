@@ -18,7 +18,7 @@ def get_cifar100(root, n_labeled,
                  download=True):
 
     base_dataset = torchvision.datasets.CIFAR100(root, train=True, download=download)
-    train_labeled_idxs, train_unlabeled_idxs, val_idxs = train_val_split(base_dataset.targets, int(n_labeled/10))
+    train_labeled_idxs, train_unlabeled_idxs, val_idxs = train_val_split(base_dataset.data, int(n_labeled/10))
 
     train_labeled_dataset = CIFAR100_labeled(root, train_labeled_idxs, train=True, transform=transform_train)
     train_unlabeled_dataset = CIFAR100_unlabeled(root, train_unlabeled_idxs, train=True, transform=TransformTwice(transform_train))
