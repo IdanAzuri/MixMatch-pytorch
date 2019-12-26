@@ -38,8 +38,7 @@ parser.add_argument('--resume', default='', type=str, metavar='PATH',
 # Miscs
 parser.add_argument('--manualSeed', type=int, default=0, help='manual seed')
 #Device options
-parser.add_argument('--gpu', default='0', type=str,
-                    help='id(s) for CUDA_VISIBLE_DEVICES')
+
 #Method options
 parser.add_argument('--n-labeled', type=int, default=50,
                         help='Number of labeled data')
@@ -57,7 +56,7 @@ args = parser.parse_args()
 state = {k: v for k, v in args._get_kwargs()}
 
 # Use CUDA
-os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+
 use_cuda = torch.cuda.is_available()
 
 # Random seed

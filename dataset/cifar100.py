@@ -17,7 +17,7 @@ def get_cifar100(root, n_labeled,
                  transform_train=None, transform_val=None,
                  download=True):
 
-    base_dataset = torchvision.datasets.CIFAR10(root, train=True, download=download)
+    base_dataset = torchvision.datasets.CIFAR0(root, train=True, download=download)
     train_labeled_idxs, train_unlabeled_idxs, val_idxs = train_val_split(base_dataset.targets, int(n_labeled/10))
 
     train_labeled_dataset = CIFAR100_labeled(root, train_labeled_idxs, train=True, transform=transform_train)
@@ -35,7 +35,7 @@ def train_val_split(labels, n_labeled_per_class):
     train_unlabeled_idxs = []
     val_idxs = []
 
-    for i in range(10):
+    for i in range(100):
         idxs = np.where(labels == i)[0]
         np.random.shuffle(idxs)
         train_labeled_idxs.extend(idxs[:n_labeled_per_class])
