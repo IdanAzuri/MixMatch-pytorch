@@ -84,7 +84,7 @@ def main():
         dataset.ToTensor(),
     ])
 
-    train_labeled_set, train_unlabeled_set, val_set, test_set = dataset.get_cifar100('/cs/dataset/CIFAR/cifar-100-python/', args.n_labeled, transform_train=transform_train, transform_val=transform_val)
+    train_labeled_set, train_unlabeled_set, val_set, test_set = dataset.get_cifar100('/cs/dataset/CIFAR/', args.n_labeled, transform_train=transform_train, transform_val=transform_val)
     labeled_trainloader = data.DataLoader(train_labeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
     unlabeled_trainloader = data.DataLoader(train_unlabeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
     val_loader = data.DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
