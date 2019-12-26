@@ -45,9 +45,9 @@ def get_cifar100(root, n_labeled,
 
 def train_val_split(labels, n_labeled_per_class):
     labels = np.array(labels)
-    train_labeled_idxs = []
-    train_unlabeled_idxs = []
-    val_idxs = []
+    train_labeled_idxs = np.arange(len(labels))
+    train_unlabeled_idxs = np.arange(len(labels))
+    val_idxs = np.arange(len(labels))
 
     for i in range(100):
         idxs = np.array(labels) == i
