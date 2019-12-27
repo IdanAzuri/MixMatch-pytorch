@@ -16,7 +16,7 @@ import torch.optim as optim
 import torch.utils.data as data
 import torchvision.transforms as transforms
 import torch.nn.functional as F
-
+import torch.nn.parallel
 import models.wideresnet as models
 import dataset.cifar100 as dataset
 from utils import  Logger, AverageMeter, accuracy, mkdir_p, savefig
@@ -85,9 +85,11 @@ def main():
     ])
 
     train_labeled_set, train_unlabeled_set, val_set, test_set = dataset.get_cifar100('/cs/dataset/CIFAR/', args.n_labeled, transform_train=transform_train, transform_val=transform_val)
+    print(len(train_labeled_set))
+    print(len(train_unlabeled_set))
     labeled_trainloader = data.DataLoader(train_labeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
     unlabeled_trainloader = data.DataLoader(train_unlabeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
-    val_loader = data.DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
+    # val_loader = data.DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
     test_loader = data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
     # Model
@@ -95,7 +97,12 @@ def main():
 
     def create_model(ema=False):
         model = models.WideResNet(num_classes=100)
-        model = model.cuda()
+        num_gpus = torch.cuda.device_count()
+        if num_gpus > 1:
+            print(f"=> Using {num_gpus} GPUs")
+            model = nn.DataParallel(model.cuda(),device_ids=list(range(num_gpus))).cuda()
+        else:
+            model = model.cuda()
 
         if ema:
             for param in model.parameters():
@@ -132,7 +139,7 @@ def main():
         logger = Logger(os.path.join(args.out, 'log.txt'), title=title, resume=True)
     else:
         logger = Logger(os.path.join(args.out, 'log.txt'), title=title)
-        logger.set_names(['Train Loss', 'Train Loss X', 'Train Loss U',  'Valid Loss', 'Valid Acc.', 'Test Loss', 'Test Acc.'])
+        logger.set_names(['Train Loss', 'Train Loss X', 'Train Loss U', 'Test Loss', 'Test Acc.'])
 
 
     step = 0
@@ -144,7 +151,7 @@ def main():
 
         train_loss, train_loss_x, train_loss_u = train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_optimizer, train_criterion, epoch, use_cuda)
         _, train_acc = validate(labeled_trainloader, ema_model, criterion, epoch, use_cuda, mode='Train Stats')
-        val_loss, val_acc = validate(val_loader, ema_model, criterion, epoch, use_cuda, mode='Valid Stats')
+        # val_loss, val_acc = validate(val_loader, ema_model, criterion, epoch, use_cuda, mode='Valid Stats')
         test_loss, test_acc = validate(test_loader, ema_model, criterion, epoch, use_cuda, mode='Test Stats ')
 
         step = args.val_iteration * (epoch + 1)
@@ -152,11 +159,11 @@ def main():
 
 
         # append logger file
-        logger.append([train_loss, train_loss_x, train_loss_u, val_loss, val_acc, test_loss, test_acc])
+        logger.append([train_loss, train_loss_x, train_loss_u, test_loss, test_acc])
 
         # save model
-        is_best = val_acc > best_acc
-        best_acc = max(val_acc, best_acc)
+        is_best = test_acc > best_acc
+        best_acc = max(test_acc, best_acc)
         save_checkpoint({
                 'epoch': epoch + 1,
                 'state_dict': model.state_dict(),
@@ -373,6 +380,8 @@ class WeightEMA(object):
     def step(self):
         one_minus_alpha = 1.0 - self.alpha
         for param, ema_param in zip(self.params, self.ema_params):
+            ema_param=ema_param.float()
+            param=param.float()
             ema_param.mul_(self.alpha)
             ema_param.add_(param * one_minus_alpha)
             # customized weight decay

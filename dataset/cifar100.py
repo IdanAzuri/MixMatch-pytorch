@@ -3,7 +3,7 @@ from PIL import Image
 
 import torchvision
 import torch
-
+from pprint import pprint
 class TransformTwice:
     def __init__(self, transform):
         self.transform = transform
@@ -23,6 +23,8 @@ def get_labels(dataset):
         return dataset.labels
     if hasattr(dataset, 'targets'):
         return dataset.targets
+    if hasattr(dataset, 'test_labels'):
+        return dataset.test_labels
     else:
         print('No labels found! ')
     return
@@ -32,14 +34,14 @@ def get_cifar100(root, n_labeled,
 
     base_dataset = torchvision.datasets.CIFAR100(root, train=True, download=download)
 
-    train_labeled_idxs, train_unlabeled_idxs, val_idxs = train_val_split(100, int(n_labeled/10))
-
+    train_labeled_idxs, train_unlabeled_idxs, val_idxs = train_val_split(base_dataset.targets, int(n_labeled))
+    print(len(train_labeled_idxs),len(train_unlabeled_idxs),len(val_idxs))
     train_labeled_dataset = CIFAR100_labeled(root, train_labeled_idxs, train=True, transform=transform_train)
     train_unlabeled_dataset = CIFAR100_unlabeled(root, train_unlabeled_idxs, train=True, transform=TransformTwice(transform_train))
     val_dataset = CIFAR100_labeled(root, val_idxs, train=True, transform=transform_val, download=True)
     test_dataset = CIFAR100_labeled(root, train=False, transform=transform_val, download=True)
 
-    print (f"#Labeled: {len(train_labeled_idxs)} #Unlabeled: {len(train_unlabeled_idxs)} #Val: {len(val_idxs)}")
+    print (f"#Labeled: {len(train_labeled_dataset)} #Unlabeled: {len(train_unlabeled_dataset)} #Val: {len(val_dataset)}")
     return train_labeled_dataset, train_unlabeled_dataset, val_dataset, test_dataset
     
 
@@ -53,11 +55,11 @@ def train_val_split(labels, n_labeled_per_class):
         idxs = np.where(labels == i)[0]
         np.random.shuffle(idxs)
         train_labeled_idxs.extend(idxs[:n_labeled_per_class])
-        train_unlabeled_idxs.extend(idxs[n_labeled_per_class:-500])
-        val_idxs.extend(idxs[-500:])
+        train_unlabeled_idxs.extend(idxs[n_labeled_per_class:])
+        # val_idxs.extend(idxs[-500:])
     np.random.shuffle(train_labeled_idxs)
     np.random.shuffle(train_unlabeled_idxs)
-    np.random.shuffle(val_idxs)
+    # np.random.shuffle(val_idxs)
 
     return train_labeled_idxs, train_unlabeled_idxs, val_idxs
 # normalize = transforms.Normalize(mean=[0.507, 0.487, 0.441], std=[0.267, 0.256, 0.276])  # CIFAR100
@@ -131,20 +133,14 @@ class ToTensor(object):
         return x
 
 class CIFAR100_labeled(torchvision.datasets.CIFAR100):
-
     def __init__(self, root, indexs=None, train=True,
                  transform=None, target_transform=None,
                  download=False):
         super(CIFAR100_labeled, self).__init__(root, train=train,
-                 transform=transform, target_transform=target_transform,
-                 download=download)
-        try:
-            self.data = self.data
-        except:
-            self.data = self.train_data
+                                              transform=transform, target_transform=target_transform,
+                                              download=download)
         if indexs is not None:
             self.data = self.data[indexs]
-            self.targets = get_labels(self)
             self.targets = np.array(self.targets)[indexs]
         self.data = transpose(normalise(self.data))
 
@@ -173,7 +169,6 @@ class CIFAR100_unlabeled(CIFAR100_labeled):
                  transform=None, target_transform=None,
                  download=False):
         super(CIFAR100_unlabeled, self).__init__(root, indexs, train=train,
-                 transform=transform, target_transform=target_transform,
-                 download=download)
+                                                transform=transform, target_transform=target_transform,
+                                                download=download)
         self.targets = np.array([-1 for i in range(len(self.targets))])
-        
