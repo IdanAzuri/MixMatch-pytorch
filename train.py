@@ -168,7 +168,7 @@ def main():
                 'epoch': epoch + 1,
                 'state_dict': model.state_dict(),
                 'ema_state_dict': ema_model.state_dict(),
-                'acc': val_acc,
+                'acc': test_acc,
                 'best_acc': best_acc,
                 'optimizer' : optimizer.state_dict(),
             }, is_best)
