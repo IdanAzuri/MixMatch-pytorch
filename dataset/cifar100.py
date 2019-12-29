@@ -55,11 +55,11 @@ def train_val_split(labels, n_labeled_per_class):
         idxs = np.where(labels == i)[0]
         np.random.shuffle(idxs)
         train_labeled_idxs.extend(idxs[:n_labeled_per_class])
-        train_unlabeled_idxs.extend(idxs[n_labeled_per_class:])
-        # val_idxs.extend(idxs[-500:])
+        train_unlabeled_idxs.extend(idxs[n_labeled_per_class:-500])
+        val_idxs.extend(idxs[-500:])
     np.random.shuffle(train_labeled_idxs)
     np.random.shuffle(train_unlabeled_idxs)
-    # np.random.shuffle(val_idxs)
+    np.random.shuffle(val_idxs)
 
     return train_labeled_idxs, train_unlabeled_idxs, val_idxs
 # normalize = transforms.Normalize(mean=[0.507, 0.487, 0.441], std=[0.267, 0.256, 0.276])  # CIFAR100

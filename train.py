@@ -24,7 +24,7 @@ from utils import  Logger, AverageMeter, accuracy, mkdir_p, savefig
 
 parser = argparse.ArgumentParser(description='PyTorch MixMatch Training')
 # Optimization options
-parser.add_argument('--epochs', default=1024, type=int, metavar='N',
+parser.add_argument('--epochs', default=100, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
@@ -139,7 +139,7 @@ def main():
         logger = Logger(os.path.join(args.out, 'log.txt'), title=title, resume=True)
     else:
         logger = Logger(os.path.join(args.out, 'log.txt'), title=title)
-        logger.set_names(['Train Loss', 'Train Loss X', 'Train Loss U', 'Test Loss', 'Test Acc.'])
+        logger.set_names(['Train Loss', 'Train Loss X', 'Train Loss U',  'Valid Loss', 'Valid Acc.', 'Test Loss', 'Test Acc.'])
 
 
     step = 0
@@ -151,7 +151,7 @@ def main():
 
         train_loss, train_loss_x, train_loss_u = train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_optimizer, train_criterion, epoch, use_cuda)
         _, train_acc = validate(labeled_trainloader, ema_model, criterion, epoch, use_cuda, mode='Train Stats')
-        # val_loss, val_acc = validate(val_loader, ema_model, criterion, epoch, use_cuda, mode='Valid Stats')
+        val_loss, val_acc = validate(val_loader, ema_model, criterion, epoch, use_cuda, mode='Valid Stats')
         test_loss, test_acc = validate(test_loader, ema_model, criterion, epoch, use_cuda, mode='Test Stats ')
 
         step = args.val_iteration * (epoch + 1)
@@ -159,16 +159,16 @@ def main():
 
 
         # append logger file
-        logger.append([train_loss, train_loss_x, train_loss_u, test_loss, test_acc])
+        logger.append([train_loss, train_loss_x, train_loss_u, val_loss, val_acc, test_loss, test_acc])
 
         # save model
-        is_best = test_acc > best_acc
-        best_acc = max(test_acc, best_acc)
+        is_best = val_acc > best_acc
+        best_acc = max(val_acc, best_acc)
         save_checkpoint({
                 'epoch': epoch + 1,
                 'state_dict': model.state_dict(),
                 'ema_state_dict': ema_model.state_dict(),
-                'acc': test_acc,
+                'acc': val_acc,
                 'best_acc': best_acc,
                 'optimizer' : optimizer.state_dict(),
             }, is_best)
