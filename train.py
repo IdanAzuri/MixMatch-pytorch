@@ -17,6 +17,8 @@ import torch.utils.data as data
 import torchvision.transforms as transforms
 import torch.nn.functional as F
 import torch.nn.parallel
+from progress.bar import Bar
+
 import models.wideresnet as models
 import dataset.cifar100 as dataset
 from utils import  Logger, AverageMeter, accuracy, mkdir_p, savefig
@@ -193,7 +195,7 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
     ws = AverageMeter()
     end = time.time()
 
-    # bar = Bar('Training', max=args.val_iteration)
+    bar = Bar('Training', max=args.val_iteration)
     labeled_train_iter = iter(labeled_trainloader)
     unlabeled_train_iter = iter(unlabeled_trainloader)
 
@@ -283,16 +285,21 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
         batch_time.update(time.time() - end)
         end = time.time()
 
-    print(
-        '({batch}/{size}) Data: {data:.3f}s | Batch: {bt:.3f}s | Loss: {loss:.4f} | Loss_x: {loss_x:.4f} | Loss_u: {loss_u:.4f} | W: {w:.4f}'.format(
+        # plot progress
+        bar.suffix  = '({batch}/{size}) Data: {data:.3f}s | Batch: {bt:.3f}s | Total: {total:} | ETA: {eta:} | Loss: {loss:.4f} | Loss_x: {loss_x:.4f} | Loss_u: {loss_u:.4f} | W: {w:.4f}'.format(
             batch=batch_idx + 1,
             size=args.val_iteration,
             data=data_time.avg,
             bt=batch_time.avg,
+                    total=bar.elapsed_td,
+                    eta=bar.eta_td,
             loss=losses.avg,
             loss_x=losses_x.avg,
             loss_u=losses_u.avg,
-            w=ws.avg))
+                    w=ws.avg,
+                    )
+        bar.next()
+    bar.finish()
 
     return (losses.avg, losses_x.avg, losses_u.avg,)
 
@@ -308,6 +315,7 @@ def validate(valloader, model, criterion, epoch, use_cuda, mode):
     model.eval()
 
     end = time.time()
+    bar = Bar(f'{mode}', max=len(valloader))
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(valloader):
             # measure data loading time
@@ -330,17 +338,19 @@ def validate(valloader, model, criterion, epoch, use_cuda, mode):
             end = time.time()
 
             # plot progress
-            print('({batch}/{size}) Data: {data:.3f}s | Batch: {bt:.3f}s | Loss: {loss:.4f} | top1: {top1: .4f} | top5: {top5: .4f}'.format(
+            bar.suffix  = '({batch}/{size}) Data: {data:.3f}s | Batch: {bt:.3f}s | Total: {total:} | ETA: {eta:} | Loss: {loss:.4f} | top1: {top1: .4f} | top5: {top5: .4f}'.format(
                         batch=batch_idx + 1,
                         size=len(valloader),
                         data=data_time.avg,
                         bt=batch_time.avg,
-
+                        total=bar.elapsed_td,
+                        eta=bar.eta_td,
                         loss=losses.avg,
                         top1=top1.avg,
                         top5=top5.avg,
-                        ))
-
+                        )
+            bar.next()
+        bar.finish()
     return (losses.avg, top1.avg)
 
 def save_checkpoint(state, is_best, checkpoint=args.out, filename='checkpoint.pth.tar'):
