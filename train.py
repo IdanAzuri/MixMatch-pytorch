@@ -326,7 +326,7 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 			idx_a, idx_b = all_inputs, all_inputs[idx]
 			z_a, z_b = Zs_real[idx_a].float().cuda(), Zs_real[idx_b].float().cuda()
 			inter_z_slerp = slerp_torch(ratio, z_a.unsqueeze(0), z_b.unsqueeze(0))
-			code = get_code(inter_z_slerp.size(0))
+			code = torch.cuda.FloatTensor(inter_z_slerp.size(0), code_size).normal_(0, 0.15)
 			generated_img = netG(inter_z_slerp.squeeze().cuda(), code)
 			mixed_input = torch.stack([normalize((img)) for img in generated_img.clone()])  # is it needed?
 		else:
