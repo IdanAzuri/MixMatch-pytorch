@@ -4,7 +4,14 @@ from PIL import Image
 import torchvision
 import torch
 from pprint import pprint
+class TransformTwice:
+    def __init__(self, transform):
+        self.transform = transform
 
+    def __call__(self, inp):
+        out1 = self.transform(inp)
+        out2 = self.transform(inp)
+        return out1, out2
 
 
 def get_labels(dataset):
@@ -30,7 +37,7 @@ def get_cifar100(root, n_labeled,
     train_labeled_idxs, train_unlabeled_idxs, val_idxs = train_val_split(base_dataset.targets, int(n_labeled))
     print(len(train_labeled_idxs),len(train_unlabeled_idxs),len(val_idxs))
     train_labeled_dataset = CIFAR100_labeled(root, train_labeled_idxs, train=True, transform=transform_train)
-    train_unlabeled_dataset = CIFAR100_unlabeled(root, train_unlabeled_idxs, train=True, transform=None)
+    train_unlabeled_dataset = CIFAR100_unlabeled(root, train_unlabeled_idxs, train=True, transform=TransformTwice(transform_train))
     val_dataset = CIFAR100_labeled(root, val_idxs, train=True, transform=transform_val, download=True)
     test_dataset = CIFAR100_labeled(root, train=False, transform=transform_val, download=True)
 
@@ -60,11 +67,7 @@ def train_val_split(labels, n_labeled_per_class):
 cifar100_mean = [0.507, 0.487, 0.441] # equals np.mean(train_set.train_data, axis=(0,1,2))/255
 cifar100_std = [0.267, 0.256, 0.276] # equals np.std(train_set.train_data, axis=(0,1,2))/255
 
-def normalise(x, mean=None, std=None):
-    if mean is None:
-        mean = cifar100_mean
-    if std is None:
-        std = cifar100_std
+def normalise(x, mean=cifar100_mean, std=cifar100_std):
     x, mean, std = [np.array(a, np.float32) for a in (x, mean, std)]
     x -= mean*255
     x *= 1.0/(255*std)

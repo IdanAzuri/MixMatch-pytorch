@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import argparse
+import glob
 import os
 import shutil
 import time
@@ -21,6 +22,10 @@ from progress.bar import Bar
 
 import models.wideresnet as models
 import dataset.cifar100 as dataset
+from glo.evaluation import get_code
+from glo.interpolate import slerp_torch
+from glo.model import _netG, _netZ
+from glo.utils import load_saved_model, get_loader_with_idx, get_cifar_param
 from utils import  Logger, AverageMeter, accuracy, mkdir_p, savefig
 
 
@@ -52,7 +57,9 @@ parser.add_argument('--alpha', default=0.75, type=float)
 parser.add_argument('--lambda-u', default=75, type=float)
 parser.add_argument('--T', default=0.5, type=float)
 parser.add_argument('--ema-decay', default=0.999, type=float)
-
+#Glo
+parser.add_argument('--keyword', default='', type=str,help='path to glo')
+parser.add_argument('--dim', default=512, type=int, metavar='N', help='Z dim')
 
 args = parser.parse_args()
 state = {k: v for k, v in args._get_kwargs()}
@@ -63,19 +70,27 @@ use_cuda = torch.cuda.is_available()
 
 # Random seed
 if args.manualSeed is None:
-    args.manualSeed = random.randint(1, 10000)
+    args.manualSeed = 11#random.randint(1, 10000)
 np.random.seed(args.manualSeed)
 
 best_acc = 0  # best test accuracy
 
+class TransformTwice:
+    def __init__(self, transform):
+        self.transform = transform
+
+    def __call__(self, inp):
+        out1 = self.transform(inp)
+        out2 = self.transform(inp)
+        return out1, out2
+
 def main():
+    global netG, netZ, Zs_real, neigh, aug_param, criterion, aug_param_test
     global best_acc
-
-    if not os.path.isdir(args.out):
-        mkdir_p(args.out)
-
+    aug_param = aug_param_test = get_cifar_param()
     # Data
     print(f'==> Preparing cifar100')
+    classes = 100
     transform_train = transforms.Compose([
         dataset.RandomPadandCrop(32),
         dataset.RandomFlip(),
@@ -86,43 +101,114 @@ def main():
         dataset.ToTensor(),
     ])
 
-    train_labeled_set, train_unlabeled_set, val_set, test_set = dataset.get_cifar100('/cs/dataset/CIFAR/', args.n_labeled, transform_train=transform_train, transform_val=transform_val)
-    print(len(train_labeled_set))
-    print(len(train_unlabeled_set))
-    labeled_trainloader = data.DataLoader(train_labeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
-    unlabeled_trainloader = data.DataLoader(train_unlabeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
+    train_labeled_set, train_unlabeled_set, val_set, test_set = dataset.get_cifar100('/cs/dataset/CIFAR/', args.n_labeled, transform_train=None, transform_val=None)
+    train_data_size = len(train_labeled_set)
+    print(f"train_data size:{train_data_size}")
+    print(f"test_data size:{len(test_set)}")
+    print(f"train_unlabeled_set data size:{len(train_unlabeled_set)}")
+    labeled_trainloader_2 = data.DataLoader(train_labeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
+    labeled_trainloader = get_loader_with_idx(train_labeled_set, batch_size=args.batch_size,
+                                            augment=transform_train,drop_last=True, **aug_param)
+    # unlabeled_trainloader = data.DataLoader(train_unlabeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
+    offset_ = len(train_labeled_set) + len(test_set)
+    unlabeled_trainloader = get_loader_with_idx(train_labeled_set, batch_size=args.batch_size,
+                                                augment=TransformTwice(transform_train), drop_last=True,
+                                                offset_idx=offset_, **aug_param)
     val_loader = data.DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
     test_loader = data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
+
 
     # Model
     print("==> creating WRN-28-2")
 
     def create_model(ema=False):
-        model = models.WideResNet(num_classes=100)
+        classifier = models.WideResNet(num_classes=100)
         num_gpus = torch.cuda.device_count()
         if num_gpus > 1:
             print(f"=> Using {num_gpus} GPUs")
-            model = nn.DataParallel(model.cuda(),device_ids=list(range(num_gpus))).cuda()
+            classifier = nn.DataParallel(classifier.cuda(),device_ids=list(range(num_gpus))).cuda()
         else:
-            model = model.cuda()
+            classifier = classifier.cuda()
 
         if ema:
-            for param in model.parameters():
+            for param in classifier.parameters():
                 param.detach_()
 
-        return model
+        return classifier
 
-    model = create_model()
-    ema_model = create_model(ema=True)
+    classifier = create_model()
+    ema_classifier = create_model(ema=True)
+
+
+    # Loading  pretrained GLO
+    keyword = args.keyword
+    dim = args.dim
+    PATH = "/cs/labs/daphna/idan.azuri/myglo/glo/"
+    noise_projection = keyword.__contains__("proj")
+    print(f" noise_projection={noise_projection}")
+    netG = _netG(dim, aug_param['rand_crop'], 3, noise_projection)
+    netG = _netG(dim, aug_param['rand_crop'], 3, noise_projection)
+    paths = list()
+    dirs = [d for d in glob.iglob(PATH)]
+
+    for dir in dirs:
+        for f in glob.iglob(f"{dir}runs/{keyword}*log.txt"):
+            # for f in glob.iglob(f"{dir}runs/*log.txt"):
+            fname = f.split("/")[-1]
+            tmp = fname.split("_")
+            name = '_'.join(tmp[:-1])
+            # if is_model_classifier:
+            # 	if "classifier" in name or "cnn" in name:
+            paths.append(name)
+    if not os.path.isdir(args.out):
+        mkdir_p(args.out)
+    rn = paths[0]
+    if "tr_" in rn:
+        print("=> Transductive mode")
+        netZ = _netZ(dim, train_data_size + len(train_unlabeled_set), classes, None)
+    else:
+        print("=> No Transductive")
+        netZ = _netZ(dim, train_data_size, classes, None)
+    try:
+        print(f"=> Loading classifier from {rn}")
+        _, netG = load_saved_model(f'runs/nets_{rn}/netG_nag', netG)
+        epoch, netZ = load_saved_model(f'runs/nets_{rn}/netZ_nag', netZ)
+        netZ = netZ.cuda()
+        netG = netG.cuda()
+        print(f"=> Embedding size = {len(netZ.emb.weight)}")
+
+        if epoch > 0:
+            print(f"=> Loaded successfully! epoch:{epoch}")
+        else:
+            print("=> No checkpoint to resume")
+    except Exception as e:
+        print(f"=> Failed resume job!\n {e}")
+    Zs_real = netZ.emb.weight.data.detach().cpu().numpy()
+    # optimizer = optim.SGD(classifier.parameters(), lr, momentum=0.9, weight_decay=WD, nesterov=True)
+    # print("=> Train new classifier")
+    # if loss_method == "cosine":
+    #     criterion = nn.CosineEmbeddingLoss().cuda()
+    # elif loss_method == "ce":
+    #     criterion = nn.CrossEntropyLoss().cuda()
+    num_gpus = torch.cuda.device_count()
+    if num_gpus > 1:
+        print(f"=> Using {num_gpus} GPUs")
+        classifier = nn.DataParallel(classifier).cuda()
+        cudnn.benchmark = True
+    else:
+        classifier = classifier.cuda()
+
+
+
 
     cudnn.benchmark = True
-    print('    Total params: %.2fM' % (sum(p.numel() for p in model.parameters())/1000000.0))
+    print('    Total params: %.2fM' % (sum(p.numel() for p in classifier.parameters())/1000000.0))
 
     train_criterion = SemiLoss()
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = optim.Adam(classifier.parameters(), lr=args.lr)
 
-    ema_optimizer= WeightEMA(model, ema_model, alpha=args.ema_decay)
+    ema_optimizer= WeightEMA(classifier, ema_classifier, alpha=args.ema_decay)
     start_epoch = 0
 
     # Resume
@@ -135,8 +221,8 @@ def main():
         checkpoint = torch.load(args.resume)
         best_acc = checkpoint['best_acc']
         start_epoch = checkpoint['epoch']
-        model.load_state_dict(checkpoint['state_dict'])
-        ema_model.load_state_dict(checkpoint['ema_state_dict'])
+        classifier.load_state_dict(checkpoint['state_dict'])
+        ema_classifier.load_state_dict(checkpoint['ema_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         logger = Logger(os.path.join(args.out, 'log.txt'), title=title, resume=True)
     else:
@@ -151,10 +237,10 @@ def main():
 
         print('\nEpoch: [%d | %d] LR: %f' % (epoch + 1, args.epochs, state['lr']))
 
-        train_loss, train_loss_x, train_loss_u = train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_optimizer, train_criterion, epoch, use_cuda)
-        _, train_acc = validate(labeled_trainloader, ema_model, criterion, epoch, use_cuda, mode='Train Stats')
-        val_loss, val_acc = validate(val_loader, ema_model, criterion, epoch, use_cuda, mode='Valid Stats')
-        test_loss, test_acc = validate(test_loader, ema_model, criterion, epoch, use_cuda, mode='Test Stats ')
+        train_loss, train_loss_x, train_loss_u = train(labeled_trainloader, unlabeled_trainloader, classifier, optimizer, ema_optimizer, train_criterion, epoch, use_cuda)
+        _, train_acc = validate(labeled_trainloader_2, ema_classifier, criterion, epoch, use_cuda, mode='Train Stats')
+        val_loss, val_acc = validate(val_loader, ema_classifier, criterion, epoch, use_cuda, mode='Valid Stats')
+        test_loss, test_acc = validate(test_loader, ema_classifier, criterion, epoch, use_cuda, mode='Test Stats ')
 
         step = args.val_iteration * (epoch + 1)
 
@@ -163,13 +249,13 @@ def main():
         # append logger file
         logger.append([train_loss, train_loss_x, train_loss_u, val_loss, val_acc, test_loss, test_acc])
 
-        # save model
+        # save classifier
         is_best = val_acc > best_acc
         best_acc = max(val_acc, best_acc)
         save_checkpoint({
                 'epoch': epoch + 1,
-                'state_dict': model.state_dict(),
-                'ema_state_dict': ema_model.state_dict(),
+                'state_dict': classifier.state_dict(),
+                'ema_state_dict': ema_classifier.state_dict(),
                 'acc': val_acc,
                 'best_acc': best_acc,
                 'optimizer' : optimizer.state_dict(),
@@ -198,37 +284,39 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
     bar = Bar('Training', max=args.val_iteration)
     labeled_train_iter = iter(labeled_trainloader)
     unlabeled_train_iter = iter(unlabeled_trainloader)
-
+    Zs_real = netZ.emb.weight.data
+    normalize = transforms.Normalize(mean=aug_param['mean'], std=aug_param['std'])
     model.train()
     for batch_idx in range(args.val_iteration):
         try:
-            inputs_x, targets_x = labeled_train_iter.next()
+            idx_x, input_x, targets_x = labeled_train_iter.next()
         except:
             labeled_train_iter = iter(labeled_trainloader)
-            inputs_x, targets_x = labeled_train_iter.next()
-
+            idx_x, input_x, targets_x = labeled_train_iter.next()
         try:
-            (inputs_u, inputs_u2), _ = unlabeled_train_iter.next()
+            idx_u, (inputs_u, inputs_u2), _  = unlabeled_train_iter.next()
         except:
             unlabeled_train_iter = iter(unlabeled_trainloader)
-            (inputs_u, inputs_u2), _ = unlabeled_train_iter.next()
+            idx_u, (inputs_u, inputs_u2), _ = unlabeled_train_iter.next()
+        code=get_code(idx_x)
 
         # measure data loading time
         data_time.update(time.time() - end)
 
-        batch_size = inputs_x.size(0)
+        batch_size = idx_x.size(0)
 
         # Transform label to one-hot
         targets_x = torch.zeros(batch_size, 100).scatter_(1, targets_x.view(-1,1), 1)
 
         if use_cuda:
-            inputs_x, targets_x = inputs_x.cuda(), targets_x.cuda(non_blocking=True)
+            input_x, targets_x = input_x.cuda(), targets_x.cuda(non_blocking=True)
             inputs_u = inputs_u.cuda()
             inputs_u2 = inputs_u2.cuda()
 
 
         with torch.no_grad():
             # compute guessed labels of unlabel samples
+
             outputs_u = model(inputs_u)
             outputs_u2 = model(inputs_u2)
             p = (torch.softmax(outputs_u, dim=1) + torch.softmax(outputs_u2, dim=1)) / 2
@@ -237,20 +325,28 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
             targets_u = targets_u.detach()
 
         # mixup
-        all_inputs = torch.cat([inputs_x, inputs_u, inputs_u2], dim=0)
+        ratio = np.random.beta(args.alpha, args.alpha) #  Beta (1, 1) = U (0, 1)
+        ratio = max(ratio, 1- ratio)
+        if random.random() > 0.5: # glo
+            all_inputs = torch.cat([idx_x, idx_u, idx_u], dim=0)
+
+            idx = torch.randperm(all_inputs.size(0))
+            idx_a, idx_b = all_inputs, all_inputs[idx]
+            z_a, z_b = Zs_real[idx_a].float().cuda(), Zs_real[idx_b].float().cuda()
+            inter_z_slerp = slerp_torch(ratio, z_a.unsqueeze(0), z_b.unsqueeze(0))
+            generated_img = netG(inter_z_slerp.squeeze().cuda(), code)
+            mixed_input = torch.stack([normalize((img)) for img in generated_img.clone()]) # is it needed?
+        else:
+            all_inputs = torch.cat([input_x, inputs_u, inputs_u2], dim=0)
+
+            idx = torch.randperm(all_inputs.size(0))
+            input_a, input_b = all_inputs, all_inputs[idx]
+            mixed_input = ratio * input_a + (1 - ratio) * input_b
+
         all_targets = torch.cat([targets_x, targets_u, targets_u], dim=0)
-
-        l = np.random.beta(args.alpha, args.alpha)
-
-        l = max(l, 1-l)
-
-        idx = torch.randperm(all_inputs.size(0))
-
-        input_a, input_b = all_inputs, all_inputs[idx]
         target_a, target_b = all_targets, all_targets[idx]
 
-        mixed_input = l * input_a + (1 - l) * input_b
-        mixed_target = l * target_a + (1 - l) * target_b
+        mixed_target = ratio * target_a + (1 - ratio) * target_b # need to think how to align it with slerp
 
         # interleave labeled and unlabed samples between batches to get correct batchnorm calculation 
         mixed_input = list(torch.split(mixed_input, batch_size))
@@ -270,10 +366,10 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
         loss = Lx + w * Lu
 
         # record loss
-        losses.update(loss.item(), inputs_x.size(0))
-        losses_x.update(Lx.item(), inputs_x.size(0))
-        losses_u.update(Lu.item(), inputs_x.size(0))
-        ws.update(w, inputs_x.size(0))
+        losses.update(loss.item(), idx_x.size(0))
+        losses_x.update(Lx.item(), idx_x.size(0))
+        losses_u.update(Lu.item(), idx_x.size(0))
+        ws.update(w, idx_x.size(0))
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
