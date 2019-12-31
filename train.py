@@ -31,27 +31,27 @@ from utils import Logger, AverageMeter, accuracy, mkdir_p, savefig
 parser = argparse.ArgumentParser(description='PyTorch MixMatch Training')
 # Optimization options
 parser.add_argument('--epochs', default=100, type=int, metavar='N',
-					help='number of total epochs to run')
+                    help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
-					help='manual epoch number (useful on restarts)')
+                    help='manual epoch number (useful on restarts)')
 parser.add_argument('--batch-size', default=64, type=int, metavar='N',
-					help='train batchsize')
+                    help='train batchsize')
 parser.add_argument('--lr', '--learning-rate', default=0.002, type=float,
-					metavar='LR', help='initial learning rate')
+                    metavar='LR', help='initial learning rate')
 # Checkpoints
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
-					help='path to latest checkpoint (default: none)')
+                    help='path to latest checkpoint (default: none)')
 # Miscs
 parser.add_argument('--manualSeed', type=int, default=0, help='manual seed')
 # Device options
 
 # Method options
 parser.add_argument('--n-labeled', type=int, default=50,
-					help='Number of labeled data')
+                    help='Number of labeled data')
 parser.add_argument('--val-iteration', type=int, default=1024,
-					help='Number of labeled data')
+                    help='Number of labeled data')
 parser.add_argument('--out', default='result',
-					help='Directory to output the result')
+                    help='Directory to output the result')
 parser.add_argument('--alpha', default=0.75, type=float)
 parser.add_argument('--lambda-u', default=75, type=float)
 parser.add_argument('--T', default=0.5, type=float)
@@ -74,7 +74,7 @@ np.random.seed(args.manualSeed)
 
 best_acc = 0  # best test accuracy
 code_size = args.dim
-
+print(f"zdim={code_size}")
 
 def get_code(idx):
 	code = torch.cuda.FloatTensor(len(idx), code_size).normal_(0, 0.15)
@@ -111,22 +111,22 @@ def main():
 	])
 
 	train_labeled_set, train_unlabeled_set, val_set, test_set = dataset.get_cifar100('/cs/dataset/CIFAR/',
-																					 args.n_labeled,
-																					 transform_train=None,
-																					 transform_val=None)
+	                                                                                 args.n_labeled,
+	                                                                                 transform_train=None,
+	                                                                                 transform_val=None)
 	train_data_size = len(train_labeled_set)
 	print(f"train_data size:{train_data_size}")
 	print(f"test_data size:{len(test_set)}")
 	print(f"train_unlabeled_set data size:{len(train_unlabeled_set)}")
 	labeled_trainloader_2 = data.DataLoader(train_labeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0,
-											drop_last=True)
+	                                        drop_last=True)
 	labeled_trainloader = get_loader_with_idx(train_labeled_set, batch_size=args.batch_size,
-											  augment=transform_train, drop_last=True, **aug_param)
+	                                          augment=transform_train, drop_last=True, **aug_param)
 	# unlabeled_trainloader = data.DataLoader(train_unlabeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
 	offset_ = len(train_labeled_set) + len(test_set)
 	unlabeled_trainloader = get_loader_with_idx(train_labeled_set, batch_size=args.batch_size,
-												augment=TransformTwice(transform_train), drop_last=True,
-												offset_idx=offset_, **aug_param)
+	                                            augment=TransformTwice(transform_train), drop_last=True,
+	                                            offset_idx=offset_, **aug_param)
 	val_loader = data.DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
 	test_loader = data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
 
@@ -236,7 +236,7 @@ def main():
 		print('\nEpoch: [%d | %d] LR: %f' % (epoch + 1, args.epochs, state['lr']))
 
 		train_loss, train_loss_x, train_loss_u = train(labeled_trainloader, unlabeled_trainloader, classifier,
-													   optimizer, ema_optimizer, train_criterion, epoch, use_cuda)
+		                                               optimizer, ema_optimizer, train_criterion, epoch, use_cuda)
 		_, train_acc = validate(labeled_trainloader_2, ema_classifier, criterion, epoch, use_cuda, mode='Train Stats')
 		val_loss, val_acc = validate(val_loader, ema_classifier, criterion, epoch, use_cuda, mode='Valid Stats')
 		test_loss, test_acc = validate(test_loader, ema_classifier, criterion, epoch, use_cuda, mode='Test Stats ')
@@ -326,8 +326,7 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 			idx_a, idx_b = all_inputs, all_inputs[idx]
 			z_a, z_b = Zs_real[idx_a].float().cuda(), Zs_real[idx_b].float().cuda()
 			inter_z_slerp = slerp_torch(ratio, z_a.unsqueeze(0), z_b.unsqueeze(0))
-			print(inter_z_slerp.size(0))
-			code = torch.cuda.FloatTensor(inter_z_slerp.squeeze().size(0), code_size).normal_(0, 0.15)
+			code = torch.cuda.FloatTensor(inter_z_slerp.squeeze().size(0), 100).normal_(0, 0.15)
 			generated_img = netG(inter_z_slerp.squeeze().cuda(), code)
 			mixed_input = torch.stack([normalize((img)) for img in generated_img.clone()])  # is it needed?
 		else:
@@ -356,7 +355,7 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 		logits_u = torch.cat(logits[1:], dim=0)
 
 		Lx, Lu, w = criterion(logits_x, mixed_target[:batch_size], logits_u, mixed_target[batch_size:],
-							  epoch + batch_idx / args.val_iteration)
+		                      epoch + batch_idx / args.val_iteration)
 
 		loss = Lx + w * Lu
 
