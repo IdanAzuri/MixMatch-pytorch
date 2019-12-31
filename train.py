@@ -293,7 +293,6 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 		except:
 			unlabeled_train_iter = iter(unlabeled_trainloader)
 			idx_u, (inputs_u, inputs_u2), _ = unlabeled_train_iter.next()
-		code = get_code(idx_x)
 
 		# measure data loading time
 		data_time.update(time.time() - end)
@@ -327,6 +326,7 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 			idx_a, idx_b = all_inputs, all_inputs[idx]
 			z_a, z_b = Zs_real[idx_a].float().cuda(), Zs_real[idx_b].float().cuda()
 			inter_z_slerp = slerp_torch(ratio, z_a.unsqueeze(0), z_b.unsqueeze(0))
+			code = get_code(inter_z_slerp.size(0))
 			generated_img = netG(inter_z_slerp.squeeze().cuda(), code)
 			mixed_input = torch.stack([normalize((img)) for img in generated_img.clone()])  # is it needed?
 		else:
