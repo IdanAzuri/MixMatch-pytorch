@@ -11,15 +11,17 @@ from torch import optim
 from torch.backends import cudnn
 from torch.optim import lr_scheduler
 
+from utils import Logger
+
 matplotlib.use('Agg')
 PACKAGE_PARENT = '..'
 SCRIPT_DIR = os.path.dirname(os.path.realpath(os.path.join(os.getcwd(), os.path.expanduser(__file__))))
 os.sys.path.append(os.path.normpath(os.path.join(SCRIPT_DIR, PACKAGE_PARENT)))
-from cub2011 import Cub2011
+# from cub2011 import Cub2011
 from glo.interpolate import slerp_torch
 from glo.utils import *
 from glo.model import _netZ, _netG, Classifier, DCGAN_G, DCGAN_G_small
-from logger import Logger
+
 
 # dim = 512
 code_size = 100
@@ -474,17 +476,17 @@ def run_eval_cifar(is_inter=False, debug=False, keyword="", epochs=200, d="", fe
 			test_data = transductive_train_data
 		else:
 			print("=> Fewshot")
-			train_data, transductive_train_data = get_cifar100_small(cifar_dir_small, shot)
+			# train_data, transductive_train_data = get_cifar100_small(cifar_dir_small, shot)
 			test_data = torchvision.datasets.CIFAR100(root=data_dir, train=False, download=True)
-	if data == "cub":
-		classes = 200
-		batch_size = 16
-		lr = 0.001
-		WD = 1e-5
-		aug_param = aug_param_test = get_cub_param()
-		train_data = Cub2011(root=f"../../data/{data}", train=True)
-		test_data = Cub2011(root=f"../../data/{data}", train=False)
-		transductive_train_data = test_data
+	# if data == "cub":
+	# 	classes = 200
+	# 	batch_size = 16
+	# 	lr = 0.001
+	# 	WD = 1e-5
+	# 	aug_param = aug_param_test = get_cub_param()
+	# 	train_data = Cub2011(root=f"../../data/{data}", train=True)
+	# 	test_data = Cub2011(root=f"../../data/{data}", train=False)
+	# 	transductive_train_data = test_data
 	if data == "stl":
 		print("STL-10")
 		classes = 10

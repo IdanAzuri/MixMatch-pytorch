@@ -22,7 +22,7 @@ from progress.bar import Bar
 
 import models.wideresnet as models
 import dataset.cifar100 as dataset
-from glo.evaluation import get_code
+
 from glo.interpolate import slerp_torch
 from glo.model import _netG, _netZ
 from glo.utils import load_saved_model, get_loader_with_idx, get_cifar_param
@@ -74,6 +74,12 @@ if args.manualSeed is None:
 np.random.seed(args.manualSeed)
 
 best_acc = 0  # best test accuracy
+code_size = args.dim
+def get_code(idx):
+    code = torch.cuda.FloatTensor(len(idx), code_size).normal_(0, 0.15)
+    # normed_code = code.norm(2, 1).detach().unsqueeze(1).expand_as(code)
+    # code = code.div(normed_code)
+    return code
 
 class TransformTwice:
     def __init__(self, transform):
@@ -85,7 +91,7 @@ class TransformTwice:
         return out1, out2
 
 def main():
-    global netG, netZ, Zs_real, neigh, aug_param, criterion, aug_param_test
+    global netG, netZ, Zs_real, aug_param, criterion, aug_param_test
     global best_acc
     aug_param = aug_param_test = get_cifar_param()
     # Data
