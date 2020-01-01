@@ -25,7 +25,7 @@ import dataset.cifar100 as dataset
 
 from glo.interpolate import slerp_torch
 from glo.model import _netG, _netZ
-from glo.utils import load_saved_model, get_loader_with_idx, get_cifar_param
+from glo.utils import load_saved_model, get_loader_with_idx, get_cifar_param,save_image_grid
 from utils import Logger, AverageMeter, accuracy, mkdir_p, savefig
 
 parser = argparse.ArgumentParser(description='PyTorch MixMatch Training')
@@ -158,10 +158,8 @@ def main():
 	noise_projection = keyword.__contains__("proj")
 	print(f" noise_projection={noise_projection}")
 	netG = _netG(dim, aug_param['rand_crop'], 3, noise_projection)
-	netG = _netG(dim, aug_param['rand_crop'], 3, noise_projection)
 	paths = list()
 	dirs = [d for d in glob.iglob(PATH)]
-
 	for dir in dirs:
 		for f in glob.iglob(f"{dir}runs/{keyword}*log.txt"):
 			# for f in glob.iglob(f"{dir}runs/*log.txt"):
@@ -176,14 +174,14 @@ def main():
 	rn = paths[0]
 	if "tr_" in rn:
 		print("=> Transductive mode")
-		netZ = _netZ(dim, train_data_size + len(train_unlabeled_set), classes, None)
+		netZ = _netZ(dim, train_data_size + len(train_unlabeled_set) +len(test_set), classes, None)
 	else:
 		print("=> No Transductive")
 		netZ = _netZ(dim, train_data_size, classes, None)
 	try:
 		print(f"=> Loading classifier from {rn}")
-		_, netG = load_saved_model(f'runs/nets_{rn}/netG_nag', netG)
-		epoch, netZ = load_saved_model(f'runs/nets_{rn}/netZ_nag', netZ)
+		_, netG = load_saved_model(f'{dir}runs/nets_{rn}/netG_nag', netG)
+		epoch, netZ = load_saved_model(f'{dir}runs/nets_{rn}/netZ_nag', netZ)
 		netZ = netZ.cuda()
 		netG = netG.cuda()
 		print(f"=> Embedding size = {len(netZ.emb.weight)}")
@@ -238,7 +236,7 @@ def main():
 		train_loss, train_loss_x, train_loss_u = train(labeled_trainloader, unlabeled_trainloader, classifier,
 		                                               optimizer, ema_optimizer, train_criterion, epoch, use_cuda)
 		_, train_acc = validate(labeled_trainloader_2, ema_classifier, criterion, epoch, use_cuda, mode='Train Stats')
-		val_loss, val_acc = validate(val_loader, ema_classifier, criterion, epoch, use_cuda, mode='Valid Stats')
+		val_loss, val_acc = validate(test_loader, ema_classifier, criterion, epoch, use_cuda, mode='Valid Stats')
 		test_loss, test_acc = validate(test_loader, ema_classifier, criterion, epoch, use_cuda, mode='Test Stats ')
 
 		step = args.val_iteration * (epoch + 1)
@@ -325,10 +323,21 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 			idx = torch.randperm(all_inputs.size(0))
 			idx_a, idx_b = all_inputs, all_inputs[idx]
 			z_a, z_b = Zs_real[idx_a].float().cuda(), Zs_real[idx_b].float().cuda()
-			inter_z_slerp = slerp_torch(ratio, z_a.unsqueeze(0), z_b.unsqueeze(0))
+			# print(f" l:{ratio}")
+			inter_z_slerp = torch.lerp(z_a.unsqueeze(0), z_b.unsqueeze(0),ratio)
 			code = torch.cuda.FloatTensor(inter_z_slerp.squeeze().size(0), 100).normal_(0, 0.15)
 			generated_img = netG(inter_z_slerp.squeeze().cuda(), code)
+			generated_imga = netG(z_a.squeeze().cuda(), code)
+			generated_imgb = netG(z_b.squeeze().cuda(), code)
+			# save_image_grid(generated_img.data, f'runs/generated_img.png', ngrid=10)
+			# save_image_grid(generated_imga.data, f'runs/generated_imga.png', ngrid=10)
+			# save_image_grid(generated_imgb.data, f'runs/generated_imgb.png', ngrid=10)
 			mixed_input = torch.stack([normalize((img)) for img in generated_img.clone()])  # is it needed?
+			# save_image_grid(mixed_input.data, f'runs/generated_img_normalized.png', ngrid=10)
+			# save_image_grid(input_x.data, f'runs/originalx.png', ngrid=10)
+			# save_image_grid(inputs_u.data, f'runs/originalu.png', ngrid=10)
+			# print("SAVED!")
+			# exit()
 		else:
 			all_inputs = torch.cat([input_x, inputs_u, inputs_u2], dim=0)
 
@@ -340,7 +349,6 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 		target_a, target_b = all_targets, all_targets[idx]
 
 		mixed_target = ratio * target_a + (1 - ratio) * target_b  # need to think how to align it with slerp
-
 		# interleave labeled and unlabed samples between batches to get correct batchnorm calculation
 		mixed_input = list(torch.split(mixed_input, batch_size))
 		mixed_input = interleave(mixed_input, batch_size)
