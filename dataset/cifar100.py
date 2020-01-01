@@ -48,7 +48,7 @@ def train_val_split(labels, n_labeled_per_class):
         idxs = np.where(labels == i)[0]
         np.random.shuffle(idxs)
         train_labeled_idxs.extend(idxs[:n_labeled_per_class])
-        train_unlabeled_idxs.extend(idxs[n_labeled_per_class:2*n_labeled_per_class])
+        train_unlabeled_idxs.extend(idxs[n_labeled_per_class:])
         # val_idxs.extend(idxs[-50:])
     np.random.shuffle(train_labeled_idxs)
     np.random.shuffle(train_unlabeled_idxs)
