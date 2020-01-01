@@ -13,7 +13,8 @@ class TransformTwice:
         out2 = self.transform(inp)
         return out1, out2
 
-
+np.random.seed(0)
+torch.manual_seed(0)
 def get_labels(dataset):
     if hasattr(dataset, 'classes'):
         return dataset.classes

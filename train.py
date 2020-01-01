@@ -25,7 +25,8 @@ import dataset.cifar100 as dataset
 
 from glo.interpolate import slerp_torch
 from glo.model import _netG, _netZ
-from glo.utils import load_saved_model, get_loader_with_idx, get_cifar_param,save_image_grid
+from glo.utils import load_saved_model, get_loader_with_idx, get_cifar_param, save_image_grid, \
+	validate_loader_consistency
 from utils import Logger, AverageMeter, accuracy, mkdir_p, savefig
 
 parser = argparse.ArgumentParser(description='PyTorch MixMatch Training')
@@ -129,7 +130,8 @@ def main():
 	                                            offset_idx=offset_, **aug_param)
 	val_loader = data.DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
 	test_loader = data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
-
+	if not os.path.isdir(args.out):
+		mkdir_p(args.out)
 	# Model
 	print("==> creating WRN-28-2")
 
@@ -169,8 +171,6 @@ def main():
 			# if is_model_classifier:
 			# 	if "classifier" in name or "cnn" in name:
 			paths.append(name)
-	if not os.path.isdir(args.out):
-		mkdir_p(args.out)
 	rn = paths[0]
 	if "tr_" in rn:
 		print("=> Transductive mode")
@@ -282,10 +282,11 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 	model.train()
 	for batch_idx in range(args.val_iteration):
 		try:
-			idx_x, input_x, targets_x = labeled_train_iter.next()
+			idx_x, input_x, _ = labeled_train_iter.next()
 		except:
 			labeled_train_iter = iter(labeled_trainloader)
-			idx_x, input_x, targets_x = labeled_train_iter.next()
+			idx_x, input_x, _ = labeled_train_iter.next()
+		targets_x = validate_loader_consistency(netZ, idx_x)
 		try:
 			idx_u, (inputs_u, inputs_u2), _ = unlabeled_train_iter.next()
 		except:
@@ -318,7 +319,9 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 		ratio = np.random.beta(args.alpha, args.alpha)  # Beta (1, 1) = U (0, 1)
 		ratio = max(ratio, 1 - ratio)
 		if random.random() > 0.5:  # glo
+			print(f"idx_x:{idx_x}\n idx_u:{idx_u}\n")
 			all_inputs = torch.cat([idx_x, idx_u, idx_u], dim=0)
+			print(f"all_inputs:{all_inputs}\n ")
 
 			idx = torch.randperm(all_inputs.size(0))
 			idx_a, idx_b = all_inputs, all_inputs[idx]
@@ -327,8 +330,8 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 			inter_z_slerp = torch.lerp(z_a.unsqueeze(0), z_b.unsqueeze(0),ratio)
 			code = torch.cuda.FloatTensor(inter_z_slerp.squeeze().size(0), 100).normal_(0, 0.15)
 			generated_img = netG(inter_z_slerp.squeeze().cuda(), code)
-			generated_imga = netG(z_a.squeeze().cuda(), code)
-			generated_imgb = netG(z_b.squeeze().cuda(), code)
+			# generated_imga = netG(z_a.squeeze().cuda(), code)
+			# generated_imgb = netG(z_b.squeeze().cuda(), code)
 			# save_image_grid(generated_img.data, f'runs/generated_img.png', ngrid=10)
 			# save_image_grid(generated_imga.data, f'runs/generated_imga.png', ngrid=10)
 			# save_image_grid(generated_imgb.data, f'runs/generated_imgb.png', ngrid=10)
