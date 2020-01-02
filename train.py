@@ -199,7 +199,7 @@ def main():
 	rn = paths[0]
 	if "tr_" in rn:
 		print("=> Transductive mode")
-		netZ = _netZ(dim, train_data_size + len(train_unlabeled_set) +len(test_set), classes, None)
+		netZ = _netZ(dim, train_data_size + len(train_unlabeled_set), classes, None)
 	else:
 		print("=> No Transductive")
 		netZ = _netZ(dim, train_data_size, classes, None)
@@ -343,24 +343,25 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 		ratio = np.random.beta(args.alpha, args.alpha)  # Beta (1, 1) = U (0, 1)
 		ratio = max(ratio, 1 - ratio)
 		if random.random() > 0.5:  # glo
-			print(f"idx_x:{idx_x}\n idx_u:{idx_u}\n")
 			all_inputs = torch.cat([idx_x, idx_u, idx_u], dim=0)
-			print(f"all_inputs:{all_inputs}\n ")
-
+			all_inputs_imgs = torch.cat([input_x, inputs_u, inputs_u2], dim=0)
 			idx = torch.randperm(all_inputs.size(0))
 			idx_a, idx_b = all_inputs, all_inputs[idx]
+			input_a, input_b = all_inputs, all_inputs_imgs[idx]
 			z_a, z_b = Zs_real[idx_a].float().cuda(), Zs_real[idx_b].float().cuda()
 			# print(f" l:{ratio}")
 			inter_z_slerp = torch.lerp(z_a.unsqueeze(0), z_b.unsqueeze(0),ratio)
 			code = torch.cuda.FloatTensor(inter_z_slerp.squeeze().size(0), 100).normal_(0, 0.15)
 			generated_img = netG(inter_z_slerp.squeeze().cuda(), code)
-			# generated_imga = netG(z_a.squeeze().cuda(), code)
+			#debug
+			generated_img_a = netG(z_a.squeeze().cuda(), code)
+			save_image_grid(input_a.data, f'runs/original.png', ngrid=10)
+			save_image_grid(generated_img_a.data, f'runs/recon.png', ngrid=10)
 			# generated_imgb = netG(z_b.squeeze().cuda(), code)
 			# save_image_grid(generated_img.data, f'runs/generated_img.png', ngrid=10)
-			# save_image_grid(generated_imga.data, f'runs/generated_imga.png', ngrid=10)
 			# save_image_grid(generated_imgb.data, f'runs/generated_imgb.png', ngrid=10)
 			mixed_input = torch.stack([transform((img)) for img in generated_img.clone()])  # is it needed?
-			# save_image_grid(mixed_input.data, f'runs/generated_img_normalized.png', ngrid=10)
+			save_image_grid(mixed_input.data, f'runs/mixed_transform.png', ngrid=10)
 			# save_image_grid(input_x.data, f'runs/originalx.png', ngrid=10)
 			# save_image_grid(inputs_u.data, f'runs/originalu.png', ngrid=10)
 			# print("SAVED!")
