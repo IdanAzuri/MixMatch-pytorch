@@ -152,11 +152,11 @@ def main():
 	labeled_trainloader_2 = data.DataLoader(train_labeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0,
 	                                        drop_last=True)
 	labeled_trainloader = get_loader_with_idx(train_labeled_set, batch_size=args.batch_size,
-	                                          augment=transform_train, drop_last=True, **aug_param)
+	                                          augment=transform_pil, drop_last=True, **aug_param)
 	# unlabeled_trainloader = data.DataLoader(train_unlabeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
 	offset_ = len(train_labeled_set) + len(test_set)
 	unlabeled_trainloader = get_loader_with_idx(train_labeled_set, batch_size=args.batch_size,
-	                                            augment=TransformTwice(transform_train), drop_last=True,
+	                                            augment=TransformTwice(transform_pil), drop_last=True,
 	                                            offset_idx=offset_, **aug_param)
 	val_loader = data.DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
 	test_loader = data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
