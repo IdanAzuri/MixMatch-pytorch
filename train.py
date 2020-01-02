@@ -119,15 +119,19 @@ def main():
 	classes = 100
 	normalize = transforms.Normalize(mean=aug_param['mean'], std=aug_param['std'])
 	transform_train = transforms.Compose([
-		dataset.RandomPadandCrop(32),
-		dataset.RandomFlip(),
-		dataset.ToTensor(),
+		transforms.RandomCrop(32,padding=4),
+		transforms.RandomHorizontalFlip(),
+		# dataset.RandomPadandCrop(32),
+		# dataset.RandomFlip(),
+		# dataset.ToTensor(),
 		normalize,
 	])
 	transform_pil = transforms.Compose([
 		transforms.ToPILImage(),
-		dataset.RandomPadandCrop(32),
-		dataset.RandomFlip(),
+		transforms.RandomCrop(32,padding=4),
+		transforms.RandomHorizontalFlip(),
+		# dataset.RandomPadandCrop(32),
+		# dataset.RandomFlip(),
 		dataset.ToTensor(),
 		normalize,
 	])
@@ -349,15 +353,18 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 			idx = torch.randperm(all_inputs.size(0))
 			idx_a, idx_b = all_inputs, all_inputs[idx]
 			input_a, input_b = all_inputs_imgs, all_inputs_imgs[idx]
+			input_u1, input_u2 = inputs_u, inputs_u2
 			z_a, z_b = Zs_real[idx_a].float().cuda(), Zs_real[idx_b].float().cuda()
+			z_u = Zs_real[idx_u].float().cuda()
 			# print(f" l:{ratio}")
 			inter_z_slerp = torch.lerp(z_a.unsqueeze(0), z_b.unsqueeze(0),ratio)
 			code = torch.cuda.FloatTensor(inter_z_slerp.squeeze().size(0), 100).normal_(0, 0.15)
 			generated_img = netG(inter_z_slerp.squeeze().cuda(), code)
 			#debug
-			generated_img_a = netG(z_a.squeeze().cuda(), code)
-			save_image_grid(input_a.data, f'runs/original.png', ngrid=10)
-			save_image_grid(generated_img_a.data, f'runs/recon.png', ngrid=10)
+			generated_img_a = netG(z_u.squeeze().cuda(), code)
+			save_image_grid(input_u1.data, f'runs/original_u1.png', ngrid=10)
+			save_image_grid(input_u2.data, f'runs/original_u2.png', ngrid=10)
+			save_image_grid(generated_img_a.data, f'runs/recon_U.png', ngrid=10)
 			# generated_imgb = netG(z_b.squeeze().cuda(), code)
 			# save_image_grid(generated_img.data, f'runs/generated_img.png', ngrid=10)
 			# save_image_grid(generated_imgb.data, f'runs/generated_imgb.png', ngrid=10)
