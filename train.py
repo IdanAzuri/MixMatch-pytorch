@@ -361,8 +361,9 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 			# generated_imgb = netG(z_b.squeeze().cuda(), code)
 			# save_image_grid(generated_img.data, f'runs/generated_img.png', ngrid=10)
 			# save_image_grid(generated_imgb.data, f'runs/generated_imgb.png', ngrid=10)
-			mixed_input = torch.stack([transform((img)) for img in generated_img.clone()])  # is it needed?
+			mixed_input = torch.stack([transform((img)) for img in generated_img.detach().cpu()])  # is it needed?
 			save_image_grid(mixed_input.data, f'runs/mixed_transform.png', ngrid=10)
+			mixed_input = mixed_input.cuda()
 			# save_image_grid(input_x.data, f'runs/originalx.png', ngrid=10)
 			# save_image_grid(inputs_u.data, f'runs/originalu.png', ngrid=10)
 			# print("SAVED!")
