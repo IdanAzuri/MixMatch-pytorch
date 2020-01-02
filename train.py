@@ -361,12 +361,12 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 			# save_image_grid(generated_img.data, f'runs/generated_img.png', ngrid=10)
 			# save_image_grid(generated_imga.data, f'runs/generated_imga.png', ngrid=10)
 			# save_image_grid(generated_imgb.data, f'runs/generated_imgb.png', ngrid=10)
-			mixed_input = torch.stack([normalize((img)) for img in generated_img.clone()])  # is it needed?
+			mixed_input = torch.stack([transform((img)) for img in generated_img.clone()])  # is it needed?
 			# save_image_grid(mixed_input.data, f'runs/generated_img_normalized.png', ngrid=10)
 			# save_image_grid(input_x.data, f'runs/originalx.png', ngrid=10)
 			# save_image_grid(inputs_u.data, f'runs/originalu.png', ngrid=10)
 			# print("SAVED!")
-			# exit()
+			exit()
 		else:
 			all_inputs = torch.cat([input_x, inputs_u, inputs_u2], dim=0)
 
