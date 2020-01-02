@@ -43,7 +43,7 @@ parser.add_argument('--lr', '--learning-rate', default=0.002, type=float,
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 # Miscs
-parser.add_argument('--manualSeed', type=int, default=0, help='manual seed')
+parser.add_argument('--manualSeed', type=int, default=1, help='manual seed')
 # Device options
 
 # Method options
@@ -70,8 +70,23 @@ use_cuda = torch.cuda.is_available()
 
 # Random seed
 if args.manualSeed is None:
-	args.manualSeed = 11  # random.randint(1, 10000)
-np.random.seed(args.manualSeed)
+	args.manualSeed = 1  # random.randint(1, 10000)
+manualSeed = args.manualSeed
+
+
+def manual_seed(seed):
+	np.random.seed(seed)
+	random.seed(seed)
+	torch.manual_seed(seed)
+	# if you are suing GPU
+	torch.cuda.manual_seed(seed)
+	torch.cuda.manual_seed_all(seed)
+	torch.backends.cudnn.enabled = False
+	torch.backends.cudnn.benchmark = False
+	torch.backends.cudnn.deterministic = True
+
+
+manual_seed(manualSeed)
 
 best_acc = 0  # best test accuracy
 code_size = args.dim
@@ -101,20 +116,30 @@ def main():
 	# Data
 	print(f'==> Preparing cifar100')
 	classes = 100
+	normalize = transforms.Normalize(mean=aug_param['mean'], std=aug_param['std'])
 	transform_train = transforms.Compose([
 		dataset.RandomPadandCrop(32),
 		dataset.RandomFlip(),
 		dataset.ToTensor(),
+		normalize,
+	])
+	transform_pil = transforms.Compose([
+		transforms.ToPILImage(),
+		dataset.RandomPadandCrop(32),
+		dataset.RandomFlip(),
+		dataset.ToTensor(),
+		normalize,
 	])
 
 	transform_val = transforms.Compose([
 		dataset.ToTensor(),
+		normalize
 	])
 
 	train_labeled_set, train_unlabeled_set, val_set, test_set = dataset.get_cifar100('/cs/dataset/CIFAR/',
 	                                                                                 args.n_labeled,
 	                                                                                 transform_train=None,
-	                                                                                 transform_val=None)
+	                                                                                 transform_val=transform_val)
 	train_data_size = len(train_labeled_set)
 	print(f"train_data size:{train_data_size}")
 	print(f"test_data size:{len(test_set)}")
@@ -234,7 +259,7 @@ def main():
 		print('\nEpoch: [%d | %d] LR: %f' % (epoch + 1, args.epochs, state['lr']))
 
 		train_loss, train_loss_x, train_loss_u = train(labeled_trainloader, unlabeled_trainloader, classifier,
-		                                               optimizer, ema_optimizer, train_criterion, epoch, use_cuda)
+		                                               optimizer, ema_optimizer, train_criterion, epoch, use_cuda, transform_pil)
 		_, train_acc = validate(labeled_trainloader_2, ema_classifier, criterion, epoch, use_cuda, mode='Train Stats')
 		val_loss, val_acc = validate(test_loader, ema_classifier, criterion, epoch, use_cuda, mode='Valid Stats')
 		test_loss, test_acc = validate(test_loader, ema_classifier, criterion, epoch, use_cuda, mode='Test Stats ')
@@ -265,7 +290,7 @@ def main():
 	print(np.mean(test_accs[-20:]))
 
 
-def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_optimizer, criterion, epoch, use_cuda):
+def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_optimizer, criterion, epoch, use_cuda,transform):
 	batch_time = AverageMeter()
 	data_time = AverageMeter()
 	losses = AverageMeter()
@@ -278,7 +303,7 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 	labeled_train_iter = iter(labeled_trainloader)
 	unlabeled_train_iter = iter(unlabeled_trainloader)
 	Zs_real = netZ.emb.weight.data
-	normalize = transforms.Normalize(mean=aug_param['mean'], std=aug_param['std'])
+
 	model.train()
 	for batch_idx in range(args.val_iteration):
 		try:
