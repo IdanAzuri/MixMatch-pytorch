@@ -9,7 +9,6 @@ from pprint import pprint
 manualSeed = 1
 
 np.random.seed(manualSeed)
-torch.random.seed(manualSeed)
 torch.manual_seed(manualSeed)
 # if you are suing GPU
 torch.cuda.manual_seed(manualSeed)
