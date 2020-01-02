@@ -43,7 +43,7 @@ parser.add_argument('--lr', '--learning-rate', default=0.002, type=float,
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
 # Miscs
-parser.add_argument('--manualSeed', type=int, default=1, help='manual seed')
+parser.add_argument('--manualSeed', type=int, default=0, help='manual seed')
 # Device options
 
 # Method options
@@ -70,7 +70,7 @@ use_cuda = torch.cuda.is_available()
 
 # Random seed
 if args.manualSeed is None:
-	args.manualSeed = 1  # random.randint(1, 10000)
+	args.manualSeed = 0  # random.randint(1, 10000)
 manualSeed = args.manualSeed
 
 
@@ -84,6 +84,7 @@ def manual_seed(seed):
 	torch.backends.cudnn.enabled = False
 	torch.backends.cudnn.benchmark = False
 	torch.backends.cudnn.deterministic = True
+	print(f"=> SEED = {seed}")
 
 
 manual_seed(manualSeed)

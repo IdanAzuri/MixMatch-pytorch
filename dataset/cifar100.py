@@ -6,19 +6,19 @@ import torch
 from pprint import pprint
 
 
-manualSeed = 1
+seed = 0
 
-np.random.seed(manualSeed)
-torch.manual_seed(manualSeed)
+np.random.seed(seed)
+torch.manual_seed(seed)
 # if you are suing GPU
-torch.cuda.manual_seed(manualSeed)
-torch.cuda.manual_seed_all(manualSeed)
+torch.cuda.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
 
 
 torch.backends.cudnn.enabled = False
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
-
+print(f"=>loader SEED = {seed}")
 
 def get_labels(dataset):
     if hasattr(dataset, 'classes'):
