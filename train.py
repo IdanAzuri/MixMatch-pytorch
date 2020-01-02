@@ -347,7 +347,7 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 			all_inputs_imgs = torch.cat([input_x, inputs_u, inputs_u2], dim=0)
 			idx = torch.randperm(all_inputs.size(0))
 			idx_a, idx_b = all_inputs, all_inputs[idx]
-			input_a, input_b = all_inputs, all_inputs_imgs[idx]
+			input_a, input_b = all_inputs_imgs, all_inputs_imgs[idx]
 			z_a, z_b = Zs_real[idx_a].float().cuda(), Zs_real[idx_b].float().cuda()
 			# print(f" l:{ratio}")
 			inter_z_slerp = torch.lerp(z_a.unsqueeze(0), z_b.unsqueeze(0),ratio)
