@@ -150,8 +150,9 @@ def main():
 	labeled_trainloader = get_loader_with_idx(train_labeled_set, batch_size=args.batch_size,
 	                                          augment=transform_train, drop_last=True, **aug_param)
 	# unlabeled_trainloader = data.DataLoader(train_unlabeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
-	offset_ = len(train_labeled_set) + len(test_set)
-	unlabeled_trainloader = get_loader_with_idx(train_labeled_set, batch_size=args.batch_size,
+	offset_ = len(train_labeled_set)
+	# offset_ += len(test_set) # Uncommenet for transdutive mode
+	unlabeled_trainloader = get_loader_with_idx(train_unlabeled_set, batch_size=args.batch_size,
 	                                            augment=TransformTwice(transform_train), drop_last=True,
 	                                            offset_idx=offset_, **aug_param)
 	val_loader = data.DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
@@ -356,21 +357,20 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 			inter_z_slerp = torch.lerp(z_a.unsqueeze(0), z_b.unsqueeze(0),ratio)
 			code = torch.cuda.FloatTensor(inter_z_slerp.squeeze().size(0), 100).normal_(0, 0.15)
 			generated_img = netG(inter_z_slerp.squeeze().cuda(), code)
-			#debug
-			generated_img_a = netG(z_u.squeeze().cuda(), code)
-			save_image_grid(input_u1.data, f'runs/original_u1.png', ngrid=10)
-			save_image_grid(input_u2.data, f'runs/original_u2.png', ngrid=10)
-			save_image_grid(generated_img_a.data, f'runs/recon_U.png', ngrid=10)
-			# generated_imgb = netG(z_b.squeeze().cuda(), code)
-			# save_image_grid(generated_img.data, f'runs/generated_img.png', ngrid=10)
-			# save_image_grid(generated_imgb.data, f'runs/generated_imgb.png', ngrid=10)
+			# debug
+				# generated_img_u = netG(z_u.squeeze().cuda(), torch.cuda.FloatTensor(z_u.squeeze().size(0), 100).normal_(0, 0.15))
+				# save_image_grid(input_u1.data, f'runs/original_u1.png', ngrid=10)
+				# save_image_grid(input_u2.data, f'runs/original_u2.png', ngrid=10)
+				# save_image_grid(generated_img_u.data, f'runs/recon_U.png', ngrid=10)
+				# generated_imgb = netG(z_b.squeeze().cuda(), code)
+				# save_image_grid(generated_img.data, f'runs/generated_img.png', ngrid=10)
+				# save_image_grid(generated_imgb.data, f'runs/generated_imgb.png', ngrid=10)
 			mixed_input = torch.stack([transform((img)) for img in generated_img.detach().cpu()])  # is it needed?
-			save_image_grid(mixed_input.data, f'runs/mixed_transform.png', ngrid=10)
+			# save_image_grid(mixed_input.data, f'runs/mixed_transform.png', ngrid=10)
 			mixed_input = mixed_input.cuda()
 			# save_image_grid(input_x.data, f'runs/originalx.png', ngrid=10)
 			# save_image_grid(inputs_u.data, f'runs/originalu.png', ngrid=10)
 			# print("SAVED!")
-			exit()
 		else:
 			all_inputs = torch.cat([input_x, inputs_u, inputs_u2], dim=0)
 
