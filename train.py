@@ -119,19 +119,15 @@ def main():
 	classes = 100
 	normalize = transforms.Normalize(mean=aug_param['mean'], std=aug_param['std'])
 	transform_train = transforms.Compose([
-		transforms.RandomCrop(32,padding=4),
-		transforms.RandomHorizontalFlip(),
-		# dataset.RandomPadandCrop(32),
-		# dataset.RandomFlip(),
-		# dataset.ToTensor(),
+		dataset.RandomPadandCrop(32),
+		dataset.RandomFlip(),
+		dataset.ToTensor(),
 		normalize,
 	])
 	transform_pil = transforms.Compose([
 		transforms.ToPILImage(),
-		transforms.RandomCrop(32,padding=4),
-		transforms.RandomHorizontalFlip(),
-		# dataset.RandomPadandCrop(32),
-		# dataset.RandomFlip(),
+		dataset.RandomPadandCrop(32),
+		dataset.RandomFlip(),
 		dataset.ToTensor(),
 		normalize,
 	])
@@ -152,11 +148,11 @@ def main():
 	labeled_trainloader_2 = data.DataLoader(train_labeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0,
 	                                        drop_last=True)
 	labeled_trainloader = get_loader_with_idx(train_labeled_set, batch_size=args.batch_size,
-	                                          augment=transform_pil, drop_last=True, **aug_param)
+	                                          augment=transform_train, drop_last=True, **aug_param)
 	# unlabeled_trainloader = data.DataLoader(train_unlabeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
 	offset_ = len(train_labeled_set) + len(test_set)
 	unlabeled_trainloader = get_loader_with_idx(train_labeled_set, batch_size=args.batch_size,
-	                                            augment=TransformTwice(transform_pil), drop_last=True,
+	                                            augment=TransformTwice(transform_train), drop_last=True,
 	                                            offset_idx=offset_, **aug_param)
 	val_loader = data.DataLoader(val_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
 	test_loader = data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False, num_workers=0)
@@ -264,7 +260,7 @@ def main():
 		print('\nEpoch: [%d | %d] LR: %f' % (epoch + 1, args.epochs, state['lr']))
 
 		train_loss, train_loss_x, train_loss_u = train(labeled_trainloader, unlabeled_trainloader, classifier,
-		                                               optimizer, ema_optimizer, train_criterion, epoch, use_cuda, transform_pil)
+		                                               optimizer, ema_optimizer, train_criterion, epoch, use_cuda, normalize)
 		_, train_acc = validate(labeled_trainloader_2, ema_classifier, criterion, epoch, use_cuda, mode='Train Stats')
 		val_loss, val_acc = validate(test_loader, ema_classifier, criterion, epoch, use_cuda, mode='Valid Stats')
 		test_loss, test_acc = validate(test_loader, ema_classifier, criterion, epoch, use_cuda, mode='Test Stats ')
