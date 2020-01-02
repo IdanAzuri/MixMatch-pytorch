@@ -307,12 +307,10 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 	model.train()
 	for batch_idx in range(args.val_iteration):
 		try:
-			idx_x, input_x, _ = labeled_train_iter.next()
+			idx_x, input_x, targets_x = labeled_train_iter.next()
 		except:
 			labeled_train_iter = iter(labeled_trainloader)
-			idx_x, input_x, _ = labeled_train_iter.next()
-		targets_x = validate_loader_consistency(netZ, idx_x)
-		targets_x = torch.tensor(targets_x).long().cuda()
+			idx_x, input_x, targets_x = labeled_train_iter.next()
 		try:
 			idx_u, (inputs_u, inputs_u2), _ = unlabeled_train_iter.next()
 		except:
