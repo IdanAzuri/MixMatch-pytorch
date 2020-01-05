@@ -21,9 +21,11 @@ def manual_seed(seed):
     torch.backends.cudnn.benchmark = False
     torch.backends.cudnn.deterministic = True
     print(f"=> SEED = {seed}")
+from train import manual_seed
 
-
+seed = 0
 manual_seed(seed)
+
 
 def get_labels(dataset):
     if hasattr(dataset, 'classes'):
