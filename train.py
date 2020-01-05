@@ -360,8 +360,6 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 			# save_image_grid(inputs_u.data, f'runs/originalu.png', ngrid=10)
 			# print("SAVED!")
 		else:
-			ratio = np.random.beta(args.alpha, args.alpha)  # Beta (1, 1) = U (0, 1)
-			ratio = max(ratio, 1 - ratio)
 			all_inputs = torch.cat([input_x, inputs_u, inputs_u2], dim=0)
 
 			idx = torch.randperm(all_inputs.size(0))

@@ -1,192 +1,205 @@
 import random
 
 import numpy as np
-from PIL import Image
-
 import torchvision
 import torch
-from pprint import pprint
 
-seed = 0
 
 
 def manual_seed(seed):
-    np.random.seed(seed)
-    random.seed(seed)
-    torch.manual_seed(seed)
-    # if you are suing GPU
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.enabled = False
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
-    print(f"=> SEED = {seed}")
-from train import manual_seed
+	np.random.seed(seed)
+	random.seed(seed)
+	torch.manual_seed(seed)
+	# if you are suing GPU
+	torch.cuda.manual_seed(seed)
+	torch.cuda.manual_seed_all(seed)
+	torch.backends.cudnn.enabled = False
+	torch.backends.cudnn.benchmark = False
+	torch.backends.cudnn.deterministic = True
+	print(f"=> SEED = {seed}")
+
+
 
 seed = 0
 manual_seed(seed)
 
 
 def get_labels(dataset):
-    if hasattr(dataset, 'classes'):
-        return dataset.classes
-    if hasattr(dataset, 'train_labels'):
-        return dataset.train_labels
-    if hasattr(dataset, 'labels'):
-        return dataset.labels
-    if hasattr(dataset, 'targets'):
-        return dataset.targets
-    if hasattr(dataset, 'test_labels'):
-        return dataset.test_labels
-    else:
-        print('No labels found! ')
-    return
-def get_cifar100(root, n_labeled,n_unlabled,
+	if hasattr(dataset, 'classes'):
+		return dataset.classes
+	if hasattr(dataset, 'train_labels'):
+		return dataset.train_labels
+	if hasattr(dataset, 'labels'):
+		return dataset.labels
+	if hasattr(dataset, 'targets'):
+		return dataset.targets
+	if hasattr(dataset, 'test_labels'):
+		return dataset.test_labels
+	else:
+		print('No labels found! ')
+	return
+
+
+def get_cifar100(root, n_labeled, n_unlabled,
                  transform_train=None, transform_val=None,
                  download=True):
+	base_dataset = torchvision.datasets.CIFAR100(root, train=True, download=download)
 
-    base_dataset = torchvision.datasets.CIFAR100(root, train=True, download=download)
+	train_labeled_idxs, train_unlabeled_idxs, val_idxs = train_val_split(base_dataset.targets, int(n_labeled),
+	                                                                     int(n_unlabled))
+	print(len(train_labeled_idxs), len(train_unlabeled_idxs), len(val_idxs))
+	train_labeled_dataset = CIFAR100_labeled(root, train_labeled_idxs, train=True, transform=transform_train)
+	train_unlabeled_dataset = CIFAR100_unlabeled(root, train_unlabeled_idxs, train=True,
+	                                             transform=transform_train)  # transform=TransformTwice(transform_train))
+	val_dataset = CIFAR100_labeled(root, val_idxs, train=True, transform=transform_val, download=True)
+	test_dataset = CIFAR100_labeled(root, train=False, transform=transform_val, download=True)
 
-    train_labeled_idxs, train_unlabeled_idxs, val_idxs = train_val_split(base_dataset.targets, int(n_labeled), int(n_unlabled))
-    print(len(train_labeled_idxs),len(train_unlabeled_idxs),len(val_idxs))
-    train_labeled_dataset = CIFAR100_labeled(root, train_labeled_idxs, train=True, transform=transform_train)
-    train_unlabeled_dataset = CIFAR100_unlabeled(root, train_unlabeled_idxs, train=True, transform=transform_train)#transform=TransformTwice(transform_train))
-    val_dataset = CIFAR100_labeled(root, val_idxs, train=True, transform=transform_val, download=True)
-    test_dataset = CIFAR100_labeled(root, train=False, transform=transform_val, download=True)
-
-    print (f"#Labeled: {len(train_labeled_dataset)} #Unlabeled: {len(train_unlabeled_dataset)} #Val: {len(val_dataset)}")
-    return train_labeled_dataset, train_unlabeled_dataset, val_dataset, test_dataset
+	print(f"#Labeled: {len(train_labeled_dataset)} #Unlabeled: {len(train_unlabeled_dataset)} #Val: {len(val_dataset)}")
+	return train_labeled_dataset, train_unlabeled_dataset, val_dataset, test_dataset
 
 
 def train_val_split(labels, n_labeled_per_class, n_unlabled_per_class):
-    labels = np.array(labels)
-    train_labeled_idxs = []
-    train_unlabeled_idxs = []
-    val_idxs = []
+	labels = np.array(labels)
+	train_labeled_idxs = []
+	train_unlabeled_idxs = []
+	val_idxs = []
 
-    for i in range(100):
-        idxs = np.where(labels == i)[0]
-        np.random.shuffle(idxs)
-        train_labeled_idxs.extend(idxs[:n_labeled_per_class])
-        # train_unlabeled_idxs.extend(idxs[-50:])
-        train_unlabeled_idxs.extend(idxs[-n_unlabled_per_class:])
-        # val_idxs.extend(idxs[-50:])
-    np.random.shuffle(train_labeled_idxs)
-    np.random.shuffle(train_unlabeled_idxs)
-    np.random.shuffle(val_idxs)
+	for i in range(100):
+		idxs = np.where(labels == i)[0]
+		np.random.shuffle(idxs)
+		train_labeled_idxs.extend(idxs[:n_labeled_per_class])
+		# train_unlabeled_idxs.extend(idxs[-50:])
+		train_unlabeled_idxs.extend(idxs[-n_unlabled_per_class:])
+	# val_idxs.extend(idxs[-50:])
+	np.random.shuffle(train_labeled_idxs)
+	np.random.shuffle(train_unlabeled_idxs)
+	np.random.shuffle(val_idxs)
 
-    return train_labeled_idxs, train_unlabeled_idxs, val_idxs
+	return train_labeled_idxs, train_unlabeled_idxs, val_idxs
+
+
 # normalize = transforms.Normalize(mean=[0.507, 0.487, 0.441], std=[0.267, 0.256, 0.276])  # CIFAR100
 
-cifar100_mean = [0.507, 0.487, 0.441] # equals np.mean(train_set.train_data, axis=(0,1,2))/255
-cifar100_std = [0.267, 0.256, 0.276] # equals np.std(train_set.train_data, axis=(0,1,2))/255
+cifar100_mean = [0.507, 0.487, 0.441]  # equals np.mean(train_set.train_data, axis=(0,1,2))/255
+cifar100_std = [0.267, 0.256, 0.276]  # equals np.std(train_set.train_data, axis=(0,1,2))/255
+
 
 def normalise(x, mean=None, std=None):
-    if mean is None:
-        mean = cifar100_mean
-    if std is None:
-        std = cifar100_std
-    x, mean, std = [np.array(a, np.float32) for a in (x, mean, std)]
-    x -= mean*255
-    x *= 1.0/(255*std)
-    return x
+	if mean is None:
+		mean = cifar100_mean
+	if std is None:
+		std = cifar100_std
+	x, mean, std = [np.array(a, np.float32) for a in (x, mean, std)]
+	x -= mean * 255
+	x *= 1.0 / (255 * std)
+	return x
+
 
 def transpose(x, source='NHWC', target='NCHW'):
-    return x.transpose([source.index(d) for d in target]) 
+	return x.transpose([source.index(d) for d in target])
+
 
 def pad(x, border=4):
-    return np.pad(x, [(0, 0), (border, border), (border, border)], mode='reflect')
+	return np.pad(x, [(0, 0), (border, border), (border, border)], mode='reflect')
+
 
 class RandomPadandCrop(object):
-    """Crop randomly the image.
+	"""Crop randomly the image.
 
-    Args:
-        output_size (tuple or int): Desired output size. If int, square crop
-            is made.
-    """
+	Args:
+		output_size (tuple or int): Desired output size. If int, square crop
+			is made.
+	"""
 
-    def __init__(self, output_size):
-        assert isinstance(output_size, (int, tuple))
-        if isinstance(output_size, int):
-            self.output_size = (output_size, output_size)
-        else:
-            assert len(output_size) == 2
-            self.output_size = output_size
+	def __init__(self, output_size):
+		assert isinstance(output_size, (int, tuple))
+		if isinstance(output_size, int):
+			self.output_size = (output_size, output_size)
+		else:
+			assert len(output_size) == 2
+			self.output_size = output_size
 
-    def __call__(self, x):
-        x = pad(x, 4)
+	def __call__(self, x):
+		x = pad(x, 4)
 
-        h, w = x.shape[1:]
-        new_h, new_w = self.output_size
+		h, w = x.shape[1:]
+		new_h, new_w = self.output_size
 
-        top = np.random.randint(0, h - new_h)
-        left = np.random.randint(0, w - new_w)
+		top = np.random.randint(0, h - new_h)
+		left = np.random.randint(0, w - new_w)
 
-        x = x[:, top: top + new_h, left: left + new_w]
+		x = x[:, top: top + new_h, left: left + new_w]
 
-        return x
+		return x
+
 
 class RandomFlip(object):
-    """Flip randomly the image.
-    """
-    def __call__(self, x):
-        if np.random.rand() < 0.5:
-            x = x[:, :, ::-1]
+	"""Flip randomly the image.
+	"""
 
-        return x.copy()
+	def __call__(self, x):
+		if np.random.rand() < 0.5:
+			x = x[:, :, ::-1]
+
+		return x.copy()
+
 
 class GaussianNoise(object):
-    """Add gaussian noise to the image.
-    """
-    def __call__(self, x):
-        c, h, w = x.shape
-        x += np.random.randn(c, h, w) * 0.15
-        return x
+	"""Add gaussian noise to the image.
+	"""
+
+	def __call__(self, x):
+		c, h, w = x.shape
+		x += np.random.randn(c, h, w) * 0.15
+		return x
+
 
 class ToTensor(object):
-    """Transform the image to tensor.
-    """
-    def __call__(self, x):
-        x = torch.from_numpy(x)
-        return x
+	"""Transform the image to tensor.
+	"""
+
+	def __call__(self, x):
+		x = torch.from_numpy(x)
+		return x
+
 
 class CIFAR100_labeled(torchvision.datasets.CIFAR100):
-    def __init__(self, root, indexs=None, train=True,
-                 transform=None, target_transform=None,
-                 download=False):
-        super(CIFAR100_labeled, self).__init__(root, train=train,
-                                              transform=transform, target_transform=target_transform,
-                                              download=download)
-        if indexs is not None:
-            self.data = self.data[indexs]
-            self.targets = np.array(self.targets)[indexs]
-        self.data = transpose(normalise(self.data))
+	def __init__(self, root, indexs=None, train=True,
+	             transform=None, target_transform=None,
+	             download=False):
+		super(CIFAR100_labeled, self).__init__(root, train=train,
+		                                       transform=transform, target_transform=target_transform,
+		                                       download=download)
+		if indexs is not None:
+			self.data = self.data[indexs]
+			self.targets = np.array(self.targets)[indexs]
+		self.data = transpose(normalise(self.data))
 
-    def __getitem__(self, index):
-        """
-        Args:
-            index (int): Index
+	def __getitem__(self, index):
+		"""
+		Args:
+			index (int): Index
 
-        Returns:
-            tuple: (image, target) where target is index of the target class.
-        """
-        img, target = self.data[index], self.targets[index]
+		Returns:
+			tuple: (image, target) where target is index of the target class.
+		"""
+		img, target = self.data[index], self.targets[index]
 
-        if self.transform is not None:
-            img = self.transform(img)
+		if self.transform is not None:
+			img = self.transform(img)
 
-        if self.target_transform is not None:
-            target = self.target_transform(target)
+		if self.target_transform is not None:
+			target = self.target_transform(target)
 
-        return img, target
-    
+		return img, target
+
 
 class CIFAR100_unlabeled(CIFAR100_labeled):
 
-    def __init__(self, root, indexs, train=True,
-                 transform=None, target_transform=None,
-                 download=False):
-        super(CIFAR100_unlabeled, self).__init__(root, indexs, train=train,
-                                                transform=transform, target_transform=target_transform,
-                                                download=download)
-        self.targets = np.array([-1 for i in range(len(self.targets))])
+	def __init__(self, root, indexs, train=True,
+	             transform=None, target_transform=None,
+	             download=False):
+		super(CIFAR100_unlabeled, self).__init__(root, indexs, train=train,
+		                                         transform=transform, target_transform=target_transform,
+		                                         download=download)
+		self.targets = np.array([-1 for i in range(len(self.targets))])
