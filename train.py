@@ -22,12 +22,11 @@ from progress.bar import Bar
 
 import models.wideresnet as models
 import dataset.cifar100 as dataset
-
+from dataset.cifar100 import manual_seed
 from glo.interpolate import slerp_torch
 from glo.model import _netG, _netZ
-from glo.utils import load_saved_model, get_loader_with_idx, get_cifar_param, save_image_grid, \
-	validate_loader_consistency
-from utils import Logger, AverageMeter, accuracy, mkdir_p, savefig
+from glo.utils import load_saved_model, get_loader_with_idx, get_cifar_param
+from utils import Logger, AverageMeter, accuracy, mkdir_p
 
 parser = argparse.ArgumentParser(description='PyTorch MixMatch Training')
 # Optimization options
@@ -47,8 +46,8 @@ parser.add_argument('--manualSeed', type=int, default=0, help='manual seed')
 # Device options
 
 # Method options
-parser.add_argument('--n-labeled', type=int, default=50,
-                    help='Number of labeled data')
+parser.add_argument('--n-labeled', type=int, default=50,help='Number of labeled data')
+parser.add_argument('--n-unlabeled', type=int, default=50,help='Number of labeled data')
 parser.add_argument('--val-iteration', type=int, default=1024,
                     help='Number of labeled data')
 parser.add_argument('--out', default='result',
@@ -72,20 +71,6 @@ use_cuda = torch.cuda.is_available()
 if args.manualSeed is None:
 	args.manualSeed = 0  # random.randint(1, 10000)
 manualSeed = args.manualSeed
-
-
-def manual_seed(seed):
-	np.random.seed(seed)
-	random.seed(seed)
-	torch.manual_seed(seed)
-	# if you are suing GPU
-	torch.cuda.manual_seed(seed)
-	torch.cuda.manual_seed_all(seed)
-	torch.backends.cudnn.enabled = False
-	torch.backends.cudnn.benchmark = False
-	torch.backends.cudnn.deterministic = True
-	print(f"=> SEED = {seed}")
-
 
 manual_seed(manualSeed)
 
@@ -124,6 +109,7 @@ def main():
 		dataset.ToTensor(),
 		normalize,
 	])
+
 	transform_pil = transforms.Compose([
 		transforms.ToPILImage(),
 		dataset.RandomPadandCrop(32),
@@ -138,7 +124,7 @@ def main():
 	])
 
 	train_labeled_set, train_unlabeled_set, val_set, test_set = dataset.get_cifar100('/cs/dataset/CIFAR/',
-	                                                                                 args.n_labeled,
+	                                                                                 args.n_labeled,args.n_unlabeled,
 	                                                                                 transform_train=None,
 	                                                                                 transform_val=transform_val)
 	train_data_size = len(train_labeled_set)
@@ -181,45 +167,46 @@ def main():
 	ema_classifier = create_model(ema=True)
 
 	# Loading  pretrained GLO
-	keyword = args.keyword
-	dim = args.dim
-	PATH = "/cs/labs/daphna/idan.azuri/myglo/glo/"
-	noise_projection = keyword.__contains__("proj")
-	print(f" noise_projection={noise_projection}")
-	netG = _netG(dim, aug_param['rand_crop'], 3, noise_projection)
-	paths = list()
-	dirs = [d for d in glob.iglob(PATH)]
-	for dir in dirs:
-		for f in glob.iglob(f"{dir}runs/{keyword}*log.txt"):
-			# for f in glob.iglob(f"{dir}runs/*log.txt"):
-			fname = f.split("/")[-1]
-			tmp = fname.split("_")
-			name = '_'.join(tmp[:-1])
-			# if is_model_classifier:
-			# 	if "classifier" in name or "cnn" in name:
-			paths.append(name)
-	rn = paths[0]
-	if "tr_" in rn:
-		print("=> Transductive mode")
-		netZ = _netZ(dim, train_data_size + len(train_unlabeled_set), classes, None)
-	else:
-		print("=> No Transductive")
-		netZ = _netZ(dim, train_data_size, classes, None)
-	try:
-		print(f"=> Loading classifier from {rn}")
-		_, netG = load_saved_model(f'{dir}runs/nets_{rn}/netG_nag', netG)
-		epoch, netZ = load_saved_model(f'{dir}runs/nets_{rn}/netZ_nag', netZ)
-		netZ = netZ.cuda()
-		netG = netG.cuda()
-		print(f"=> Embedding size = {len(netZ.emb.weight)}")
-
-		if epoch > 0:
-			print(f"=> Loaded successfully! epoch:{epoch}")
+	if True:
+		keyword = args.keyword
+		dim = args.dim
+		PATH = "/cs/labs/daphna/idan.azuri/myglo/glo/"
+		noise_projection = keyword.__contains__("proj")
+		print(f" noise_projection={noise_projection}")
+		netG = _netG(dim, aug_param['rand_crop'], 3, noise_projection)
+		paths = list()
+		dirs = [d for d in glob.iglob(PATH)]
+		for dir in dirs:
+			for f in glob.iglob(f"{dir}runs/{keyword}*log.txt"):
+				# for f in glob.iglob(f"{dir}runs/*log.txt"):
+				fname = f.split("/")[-1]
+				tmp = fname.split("_")
+				name = '_'.join(tmp[:-1])
+				# if is_model_classifier:
+				# 	if "classifier" in name or "cnn" in name:
+				paths.append(name)
+		rn = paths[0]
+		if "tr_" in rn:
+			print("=> Transductive mode")
+			netZ = _netZ(dim, train_data_size + len(train_unlabeled_set), classes, None)
 		else:
-			print("=> No checkpoint to resume")
-	except Exception as e:
-		print(f"=> Failed resume job!\n {e}")
-	Zs_real = netZ.emb.weight.data.detach().cpu().numpy()
+			print("=> No Transductive")
+			netZ = _netZ(dim, train_data_size, classes, None)
+		try:
+			print(f"=> Loading classifier from {rn}")
+			_, netG = load_saved_model(f'{dir}runs/nets_{rn}/netG_nag', netG)
+			epoch, netZ = load_saved_model(f'{dir}runs/nets_{rn}/netZ_nag', netZ)
+			netZ = netZ.cuda()
+			netG = netG.cuda()
+			print(f"=> Embedding size = {len(netZ.emb.weight)}")
+
+			if epoch > 0:
+				print(f"=> Loaded successfully! epoch:{epoch}")
+			else:
+				print("=> No checkpoint to resume")
+		except Exception as e:
+			print(f"=> Failed resume job!\n {e}")
+		Zs_real = netZ.emb.weight.data.detach().cpu().numpy()
 	# optimizer = optim.SGD(classifier.parameters(), lr, momentum=0.9, weight_decay=WD, nesterov=True)
 	# print("=> Train new classifier")
 	# if loss_method == "cosine":
@@ -342,19 +329,20 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 			targets_u = targets_u.detach()
 
 		# mixup
-		ratio = np.random.beta(args.alpha, args.alpha)  # Beta (1, 1) = U (0, 1)
-		ratio = max(ratio, 1 - ratio)
+
 		if random.random() > 0.5:  # glo
+			ratios = list(np.linspace(0.1, 0.4, 5))
+			ratio = random.sample(ratios, 1)[0]
 			all_inputs = torch.cat([idx_x, idx_u, idx_u], dim=0)
 			all_inputs_imgs = torch.cat([input_x, inputs_u, inputs_u2], dim=0)
 			idx = torch.randperm(all_inputs.size(0))
 			idx_a, idx_b = all_inputs, all_inputs[idx]
-			input_a, input_b = all_inputs_imgs, all_inputs_imgs[idx]
-			input_u1, input_u2 = inputs_u, inputs_u2
+			# input_a, input_b = all_inputs_imgs, all_inputs_imgs[idx]
+			# input_u1, input_u2 = inputs_u, inputs_u2
 			z_a, z_b = Zs_real[idx_a].float().cuda(), Zs_real[idx_b].float().cuda()
-			z_u = Zs_real[idx_u].float().cuda()
+			# z_u = Zs_real[idx_u].float().cuda()
 			# print(f" l:{ratio}")
-			inter_z_slerp = torch.lerp(z_a.unsqueeze(0), z_b.unsqueeze(0),ratio)
+			inter_z_slerp = slerp_torch(ratio,z_a.unsqueeze(0), z_b.unsqueeze(0))
 			code = torch.cuda.FloatTensor(inter_z_slerp.squeeze().size(0), 100).normal_(0, 0.15)
 			generated_img = netG(inter_z_slerp.squeeze().cuda(), code)
 			# debug
@@ -372,6 +360,8 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 			# save_image_grid(inputs_u.data, f'runs/originalu.png', ngrid=10)
 			# print("SAVED!")
 		else:
+			ratio = np.random.beta(args.alpha, args.alpha)  # Beta (1, 1) = U (0, 1)
+			ratio = max(ratio, 1 - ratio)
 			all_inputs = torch.cat([input_x, inputs_u, inputs_u2], dim=0)
 
 			idx = torch.randperm(all_inputs.size(0))

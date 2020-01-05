@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 from PIL import Image
 
@@ -5,20 +7,23 @@ import torchvision
 import torch
 from pprint import pprint
 
-
 seed = 0
 
-np.random.seed(seed)
-torch.manual_seed(seed)
-# if you are suing GPU
-torch.cuda.manual_seed(seed)
-torch.cuda.manual_seed_all(seed)
+
+def manual_seed(seed):
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.manual_seed(seed)
+    # if you are suing GPU
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.enabled = False
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    print(f"=> SEED = {seed}")
 
 
-torch.backends.cudnn.enabled = False
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.deterministic = True
-print(f"=>loader SEED = {seed}")
+manual_seed(seed)
 
 def get_labels(dataset):
     if hasattr(dataset, 'classes'):
@@ -34,24 +39,24 @@ def get_labels(dataset):
     else:
         print('No labels found! ')
     return
-def get_cifar100(root, n_labeled,
+def get_cifar100(root, n_labeled,n_unlabled,
                  transform_train=None, transform_val=None,
                  download=True):
 
     base_dataset = torchvision.datasets.CIFAR100(root, train=True, download=download)
 
-    train_labeled_idxs, train_unlabeled_idxs, val_idxs = train_val_split(base_dataset.targets, int(n_labeled))
+    train_labeled_idxs, train_unlabeled_idxs, val_idxs = train_val_split(base_dataset.targets, int(n_labeled), int(n_unlabled))
     print(len(train_labeled_idxs),len(train_unlabeled_idxs),len(val_idxs))
     train_labeled_dataset = CIFAR100_labeled(root, train_labeled_idxs, train=True, transform=transform_train)
-    train_unlabeled_dataset = CIFAR100_unlabeled(root, train_unlabeled_idxs, train=True, transform=None)
+    train_unlabeled_dataset = CIFAR100_unlabeled(root, train_unlabeled_idxs, train=True, transform=transform_train)#transform=TransformTwice(transform_train))
     val_dataset = CIFAR100_labeled(root, val_idxs, train=True, transform=transform_val, download=True)
     test_dataset = CIFAR100_labeled(root, train=False, transform=transform_val, download=True)
 
     print (f"#Labeled: {len(train_labeled_dataset)} #Unlabeled: {len(train_unlabeled_dataset)} #Val: {len(val_dataset)}")
     return train_labeled_dataset, train_unlabeled_dataset, val_dataset, test_dataset
-    
 
-def train_val_split(labels, n_labeled_per_class):
+
+def train_val_split(labels, n_labeled_per_class, n_unlabled_per_class):
     labels = np.array(labels)
     train_labeled_idxs = []
     train_unlabeled_idxs = []
@@ -61,11 +66,12 @@ def train_val_split(labels, n_labeled_per_class):
         idxs = np.where(labels == i)[0]
         np.random.shuffle(idxs)
         train_labeled_idxs.extend(idxs[:n_labeled_per_class])
-        train_unlabeled_idxs.extend(idxs[-50:])
+        # train_unlabeled_idxs.extend(idxs[-50:])
+        train_unlabeled_idxs.extend(idxs[-n_unlabled_per_class:])
         # val_idxs.extend(idxs[-50:])
     np.random.shuffle(train_labeled_idxs)
     np.random.shuffle(train_unlabeled_idxs)
-    # np.random.shuffle(val_idxs)
+    np.random.shuffle(val_idxs)
 
     return train_labeled_idxs, train_unlabeled_idxs, val_idxs
 # normalize = transforms.Normalize(mean=[0.507, 0.487, 0.441], std=[0.267, 0.256, 0.276])  # CIFAR100
