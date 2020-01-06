@@ -167,8 +167,9 @@ def main():
 	ema_classifier = create_model(ema=True)
 
 	# Loading  pretrained GLO
-	if True:
-		keyword = args.keyword
+	keyword = args.keyword
+	is_glo = len(keyword) > 5
+	if is_glo:
 		dim = args.dim
 		PATH = "/cs/labs/daphna/idan.azuri/myglo/glo/"
 		noise_projection = keyword.__contains__("proj")
@@ -206,7 +207,8 @@ def main():
 				print("=> No checkpoint to resume")
 		except Exception as e:
 			print(f"=> Failed resume job!\n {e}")
-		Zs_real = netZ.emb.weight.data.detach().cpu().numpy()
+		# Zs_real = netZ.emb.weight.data.detach().cpu().numpy()
+		Zs_real = netZ.emb.weight.data
 	# optimizer = optim.SGD(classifier.parameters(), lr, momentum=0.9, weight_decay=WD, nesterov=True)
 	# print("=> Train new classifier")
 	# if loss_method == "cosine":
@@ -248,7 +250,7 @@ def main():
 		print('\nEpoch: [%d | %d] LR: %f' % (epoch + 1, args.epochs, state['lr']))
 
 		train_loss, train_loss_x, train_loss_u = train(labeled_trainloader, unlabeled_trainloader, classifier,
-		                                               optimizer, ema_optimizer, train_criterion, epoch, use_cuda, normalize)
+		                                               optimizer, ema_optimizer, train_criterion, epoch, use_cuda, normalize, is_glo)
 		_, train_acc = validate(labeled_trainloader_2, ema_classifier, criterion, epoch, use_cuda, mode='Train Stats')
 		val_loss, val_acc = validate(test_loader, ema_classifier, criterion, epoch, use_cuda, mode='Valid Stats')
 		test_loss, test_acc = validate(test_loader, ema_classifier, criterion, epoch, use_cuda, mode='Test Stats ')
@@ -279,7 +281,7 @@ def main():
 	print(np.mean(test_accs[-20:]))
 
 
-def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_optimizer, criterion, epoch, use_cuda,transform):
+def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_optimizer, criterion, epoch, use_cuda,transform,is_glo=False):
 	batch_time = AverageMeter()
 	data_time = AverageMeter()
 	losses = AverageMeter()
@@ -291,7 +293,7 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 	bar = Bar('Training', max=args.val_iteration)
 	labeled_train_iter = iter(labeled_trainloader)
 	unlabeled_train_iter = iter(unlabeled_trainloader)
-	Zs_real = netZ.emb.weight.data
+
 
 	model.train()
 	for batch_idx in range(args.val_iteration):
@@ -330,7 +332,7 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 
 		# mixup
 
-		if random.random() > 0.5:  # glo
+		if is_glo and random.random() > 0.5:  # glo
 			ratios = list(np.linspace(0.1, 0.4, 5))
 			ratio = random.sample(ratios, 1)[0]
 			all_inputs = torch.cat([idx_x, idx_u, idx_u], dim=0)
