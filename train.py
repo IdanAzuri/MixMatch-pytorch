@@ -25,12 +25,12 @@ import dataset.cifar100 as dataset
 from dataset.cifar100 import manual_seed
 from glo.interpolate import slerp_torch
 from glo.model import _netG, _netZ
-from glo.utils import load_saved_model, get_loader_with_idx, get_cifar_param
+from glo.utils import load_saved_model, get_loader_with_idx, get_cifar_param, save_image_grid
 from utils import Logger, AverageMeter, accuracy, mkdir_p
 
 parser = argparse.ArgumentParser(description='PyTorch MixMatch Training')
 # Optimization options
-parser.add_argument('--epochs', default=100, type=int, metavar='N',
+parser.add_argument('--epochs', default=300, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
@@ -365,10 +365,15 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_opti
 			ratio = np.random.beta(args.alpha, args.alpha)  # Beta (1, 1) = U (0, 1)
 			ratio = max(ratio, 1 - ratio)
 			all_inputs = torch.cat([input_x, inputs_u, inputs_u2], dim=0)
-
+			save_image_grid(inputs_u.data, f'runs/{batch_idx}original_u1.png', ngrid=10)
+			save_image_grid(inputs_u2.data, f'runs/{batch_idx}original_u2.png', ngrid=10)
+			save_image_grid(input_x.data, f'runs/{batch_idx}original_u2.png', ngrid=10)
 			idx = torch.randperm(all_inputs.size(0))
 			input_a, input_b = all_inputs, all_inputs[idx]
 			mixed_input = ratio * input_a + (1 - ratio) * input_b
+			save_image_grid(mixed_input.data, f'runs/{batch_idx}mixed_input.png', ngrid=10)
+			if batch_idx == 5:
+				exit()
 
 		all_targets = torch.cat([targets_x, targets_u, targets_u], dim=0)
 		target_a, target_b = all_targets, all_targets[idx]
