@@ -135,7 +135,7 @@ def main():
 	                                        drop_last=True)
 	labeled_trainloader = get_loader_with_idx(train_labeled_set, batch_size=args.batch_size,
 	                                          augment=transform_train, drop_last=True, **aug_param)
-	# unlabeled_trainloader = data.DataLoader(train_unlabeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
+	unlabeled_trainloader = data.DataLoader(train_unlabeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
 	offset_ = len(train_labeled_set)
 	# offset_ += len(test_set) # Uncommenet for transdutive mode
 	unlabeled_trainloader = get_loader_with_idx(train_unlabeled_set, batch_size=args.batch_size,
@@ -282,12 +282,12 @@ def main():
 
 
 def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, ema_optimizer, criterion, epoch, use_cuda,transform,is_glo=False):
-	batch_time = AverageMeter()
-	data_time = AverageMeter()
-	losses = AverageMeter()
-	losses_x = AverageMeter()
-	losses_u = AverageMeter()
-	ws = AverageMeter()
+	batch_time = AverageMeter("batch_time")
+	data_time = AverageMeter("data_time")
+	losses = AverageMeter("loss")
+	losses_x = AverageMeter("loss_x")
+	losses_u = AverageMeter("loss_u")
+	ws = AverageMeter("ws")
 	end = time.time()
 
 	bar = Bar('Training', max=args.val_iteration)
