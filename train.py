@@ -135,7 +135,7 @@ def main():
 	                                        drop_last=True)
 	labeled_trainloader = get_loader_with_idx(train_labeled_set, batch_size=args.batch_size,
 	                                          augment=transform_train, drop_last=True, **aug_param)
-	unlabeled_trainloader = data.DataLoader(train_unlabeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
+	# unlabeled_trainloader = data.DataLoader(train_unlabeled_set, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
 	offset_ = len(train_labeled_set)
 	# offset_ += len(test_set) # Uncommenet for transdutive mode
 	unlabeled_trainloader = get_loader_with_idx(train_unlabeled_set, batch_size=args.batch_size,
